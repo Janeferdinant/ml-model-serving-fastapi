@@ -1,0 +1,26 @@
+# Local run only: `docker compose up --build`. Nothing here pushes or deploys an image.
+services:
+  api:
+    build: .
+    image: ml-model-serving-fastapi:local
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      MLS_MODEL_VERSION: ${MLS_MODEL_VERSION:-production}
+      # Empty means authentication is disabled. Set it in your shell or an untracked .env file.
+      MLS_API_KEY: ${MLS_API_KEY:-}
+      MLS_RATE_LIMIT_PER_MINUTE: ${MLS_RATE_LIMIT_PER_MINUTE:-600}
+      MLS_REQUEST_LOG_PATH: /data/requests.jsonl
+    volumes:
+      - request-logs:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  request-logs:

@@ -1,0 +1,36 @@
+# Builds and tags the container image when a version tag is pushed.
+# It does NOT publish the image: there is no registry login and no push, and the token is
+# read-only. The tagged image exists only on the runner and is discarded when the job ends.
+name: Release build (no publish)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build, tag and smoke-test the image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build and tag (local only)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          docker build --tag "ml-model-serving-fastapi:${TAG}" --tag ml-model-serving-fastapi:release .
+      - name: Smoke test the tagged image
+        run: sh scripts/docker_smoke.sh ml-model-serving-fastapi:release
+      - name: Summary
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          {
+            echo "Built ml-model-serving-fastapi:${TAG} on the runner."
+            echo "Image id: $(docker image inspect ml-model-serving-fastapi:release --format '{{.Id}}')"
+            echo "Size: $(docker image inspect ml-model-serving-fastapi:release --format '{{.Size}}') bytes"
+            echo "The image was not pushed to any registry."
+          } >> "$GITHUB_STEP_SUMMARY"
