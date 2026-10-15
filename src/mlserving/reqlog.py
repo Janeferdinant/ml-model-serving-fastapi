@@ -14,7 +14,7 @@ class RequestLogWriter:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._fh: IO[str] = self.path.open("a", encoding="utf-8")
+        self._fh: IO[str] = self.path.open("a", encoding="utf-8", newline="\n")
         self._lock = threading.Lock()
 
     def log(

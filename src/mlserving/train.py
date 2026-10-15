@@ -276,7 +276,7 @@ def train(config: TrainConfig, dataset: Dataset | None = None) -> TrainResult:
         model_path = partial / "model.joblib"
         joblib.dump(model, model_path, compress=3)
         ref_path = partial / "reference.json"
-        ref_path.write_text(json.dumps(profile.to_dict()) + "\n", encoding="utf-8")
+        ref_path.write_text(json.dumps(profile.to_dict()) + "\n", encoding="utf-8", newline="\n")
 
         from datetime import UTC, datetime
 
@@ -331,7 +331,9 @@ def train(config: TrainConfig, dataset: Dataset | None = None) -> TrainResult:
         }
         if run is not None:
             meta["mlflow"] = {"run_id": run.info.run_id, "experiment": config.mlflow_experiment}
-        (partial / "metadata.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+        (partial / "metadata.json").write_text(
+            json.dumps(meta, indent=2) + "\n", encoding="utf-8", newline="\n"
+        )
         partial.rename(version_dir)
         if run is not None:
             _mlflow_log(config, meta, version_dir)

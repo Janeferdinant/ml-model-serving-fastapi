@@ -137,3 +137,11 @@ def test_load_california_rejects_unexpected_shape(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(datasets, "fetch_california_housing", lambda **_: Fake())
     with pytest.raises(ValueError, match="features"):
         load_california(Path("."))
+
+
+def test_text_artifacts_use_lf_line_endings(tmp_path: Path) -> None:
+    """The checksum of reference.json must not depend on the platform's newline convention."""
+    train(fast_config(tmp_path, "v1"), dataset=synthetic_dataset())
+    for name in ("metadata.json", "reference.json"):
+        assert b"\r\n" not in (tmp_path / "v1" / name).read_bytes()
+    assert b"\r\n" not in (tmp_path / "registry.json").read_bytes()

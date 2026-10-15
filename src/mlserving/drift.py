@@ -273,8 +273,8 @@ def write_report(report: dict[str, Any], out_dir: Path) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     json_path = out_dir / "drift_report.json"
     html_path = out_dir / "drift_report.html"
-    json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    html_path.write_text(render_html(report), encoding="utf-8")
+    json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n")
+    html_path.write_text(render_html(report), encoding="utf-8", newline="\n")
     return json_path, html_path
 
 

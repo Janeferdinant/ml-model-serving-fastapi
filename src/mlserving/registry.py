@@ -89,7 +89,9 @@ def save_registry(model_dir: Path, registry: dict[str, Any]) -> None:
     model_dir = Path(model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
     tmp = model_dir / f"{REGISTRY_FILE}.tmp"
-    tmp.write_text(json.dumps(registry, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.write_text(
+        json.dumps(registry, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+    )
     os.replace(tmp, model_dir / REGISTRY_FILE)
 
 
