@@ -31,6 +31,8 @@ from typing import Any
 import aiohttp
 import numpy as np
 
+from mlserving import registry
+
 ROOT = Path(__file__).resolve().parents[1]
 FEATURES = [
     "MedInc",
@@ -45,8 +47,9 @@ FEATURES = [
 
 
 def make_payloads(seed: int, n: int, batch: int) -> tuple[list[bytes], list[bytes]]:
-    """Pre-serialised request bodies drawn from the training distribution (inside the range guard)."""
-    meta = json.loads((ROOT / "models" / "v1" / "metadata.json").read_text(encoding="utf-8"))
+    """Pre-serialised request bodies drawn from the training distribution."""
+    version = registry.resolve_version(ROOT / "models", "production")
+    meta = json.loads((ROOT / "models" / version / "metadata.json").read_text(encoding="utf-8"))
     schema = {f["name"]: f for f in meta["feature_schema"]}
     rng = np.random.default_rng(seed)
 
@@ -144,8 +147,8 @@ def start_server(workers: int, port: int) -> subprocess.Popen[bytes]:
         str(workers),
         "--no-access-log",
     ]
-    flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0  # type: ignore[attr-defined]
-    return subprocess.Popen(  # noqa: S603
+    flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+    return subprocess.Popen(
         cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags
     )
 
@@ -155,14 +158,14 @@ def stop_server(proc: subprocess.Popen[bytes]) -> None:
     if proc.poll() is not None:
         return
     try:
-        if os.name == "nt":
-            os.kill(proc.pid, signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+        if sys.platform == "win32":
+            os.kill(proc.pid, signal.CTRL_BREAK_EVENT)
         else:
             proc.send_signal(signal.SIGTERM)
         proc.wait(timeout=20)
     except (subprocess.TimeoutExpired, OSError):
-        if os.name == "nt":
-            subprocess.run(  # noqa: S603
+        if sys.platform == "win32":
+            subprocess.run(
                 ["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, check=False
             )
         else:
@@ -175,7 +178,7 @@ def wait_ready(port: int, workers: int, timeout: float = 90.0) -> None:
     ok = 0
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/ready", timeout=2) as r:  # noqa: S310
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/ready", timeout=2) as r:
                 ok = ok + 1 if r.status == 200 else 0
         except OSError:
             ok = 0
@@ -193,7 +196,7 @@ def summarise(reps: list[dict[str, Any]]) -> dict[str, Any]:
             for k in path:
                 v = v[k]
             vals.append(v)
-        return round(statistics.median(vals), 3)
+        return round(float(statistics.median(vals)), 3)
 
     return {
         "reps": len(reps),
@@ -266,7 +269,8 @@ def main() -> int:
                         s = entry["summary"]
                         print(
                             f"workers={workers} {scenario:<6} conc={conc:<4} "
-                            f"{s['throughput_rps_median']:>8.1f} req/s  p50 {s['p50_ms_median']:.2f}  "
+                            f"{s['throughput_rps_median']:>8.1f} req/s  "
+                            f"p50 {s['p50_ms_median']:.2f}  "
                             f"p95 {s['p95_ms_median']:.2f}  p99 {s['p99_ms_median']:.2f} ms  "
                             f"errors {s['errors_total']}",
                             flush=True,
