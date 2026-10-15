@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-15",
+  "hardware": "AMD Ryzen 7 5800X (8 cores, 16 threads), 32 GB RAM, Windows 11 Pro",
+  "logical_cpus": 16,
+  "platform": "Windows-10-10.0.26200-SP0",
+  "scikit_learn": "1.9.1",
+  "repeats": 300,
+  "note": "single process, no HTTP; 'default' = scikit-learn's OpenMP default thread count",
+  "rows": [
+    {
+      "max_iter": 300,
+      "threads": "default",
+      "rows": 1,
+      "median_ms": 16.386,
+      "p95_ms": 41.088
+    },
+    {
+      "max_iter": 300,
+      "threads": "default",
+      "rows": 32,
+      "median_ms": 16.054,
+      "p95_ms": 34.946
+    },
+    {
+      "max_iter": 300,
+      "threads": 1,
+      "rows": 1,
+      "median_ms": 4.266,
+      "p95_ms": 6.918
+    },
+    {
+      "max_iter": 300,
+      "threads": 1,
+      "rows": 32,
+      "median_ms": 4.349,
+      "p95_ms": 5.458
+    },
+    {
+      "max_iter": 100,
+      "threads": "default",
+      "rows": 1,
+      "median_ms": 5.434,
+      "p95_ms": 16.156
+    },
+    {
+      "max_iter": 100,
+      "threads": "default",
+      "rows": 32,
+      "median_ms": 4.323,
+      "p95_ms": 13.141
+    },
+    {
+      "max_iter": 100,
+      "threads": 1,
+      "rows": 1,
+      "median_ms": 1.413,
+      "p95_ms": 2.049
+    },
+    {
+      "max_iter": 100,
+      "threads": 1,
+      "rows": 32,
+      "median_ms": 1.46,
+      "p95_ms": 1.749
+    }
+  ]
+}

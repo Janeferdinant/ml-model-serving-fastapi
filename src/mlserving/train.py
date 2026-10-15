@@ -60,7 +60,7 @@ class TrainConfig:
     version: str | None = None
     seed: int = 42
     test_size: float = 0.2
-    max_iter: int = 300
+    max_iter: int = 100
     learning_rate: float = 0.1
     max_leaf_nodes: int = 31
     bootstrap: int = 1000

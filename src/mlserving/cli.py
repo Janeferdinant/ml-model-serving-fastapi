@@ -27,7 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--out", type=Path, default=Path("models"))
     t.add_argument("--version", help="explicit version name (default: next free vN)")
     t.add_argument("--seed", type=int, default=42)
-    t.add_argument("--max-iter", type=int, default=300)
+    t.add_argument("--max-iter", type=int, default=100)
     t.add_argument("--learning-rate", type=float, default=0.1)
     t.add_argument("--max-leaf-nodes", type=int, default=31)
     t.add_argument("--bootstrap", type=int, default=1000)
