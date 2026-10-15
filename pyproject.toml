@@ -54,7 +54,7 @@ files = ["src", "scripts", "loadtest"]
 plugins = []
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "scipy.*", "joblib.*", "mlflow.*", "matplotlib.*", "threadpoolctl.*", "aiohttp.*"]
+module = ["sklearn.*", "scipy.*", "joblib.*", "mlflow.*", "matplotlib.*", "threadpoolctl.*", "aiohttp.*", "psutil.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

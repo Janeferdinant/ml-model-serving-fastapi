@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ML model serving explorer</title>
+<meta name="description" content="Static explorer for the ml-model-serving-fastapi project: API reference, load-test results and a drift report explorer. Opens from disk; no server and no network.">
+<style>
+:root{
+  --bg:#fafaf8;--card:#fff;--text:#1c2330;--muted:#5a6477;--line:#dfe3ea;--accent:#1f5fbf;
+  --ok:#1a7f37;--warn:#9a6700;--bad:#c4262e;--ref:#8b93a1;--cur:#2a6fdb;--code:#f0f2f6;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f131b;--card:#171c26;--text:#e6e9f0;--muted:#9aa4b5;--line:#2a3140;--accent:#6aa3ff;
+    --ok:#4cc26a;--warn:#e0b341;--bad:#ff7b72;--ref:#7d8696;--cur:#5b9bff;--code:#1e2431;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+header{padding:28px 0 8px}
+h1{font-size:1.65rem;line-height:1.2;margin:0 0 6px}
+h2{font-size:1.25rem;margin:0 0 4px}
+h3{font-size:1rem;margin:18px 0 6px}
+.lead{color:var(--muted);margin:0;max-width:70ch}
+nav{display:flex;flex-wrap:wrap;gap:8px 18px;padding:12px 0;border-bottom:1px solid var(--line);margin-bottom:8px}
+nav a{text-decoration:none;font-weight:600;font-size:.95rem}
+section{padding:28px 0 8px;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:0}
+.sub{color:var(--muted);margin:0 0 14px;font-size:.95rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:12px 0}
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.03em}
+tr:last-child td{border-bottom:0}
+td.wrap-ok{white-space:normal;min-width:14em}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.85rem}
+code{background:var(--code);padding:1px 5px;border-radius:4px}
+pre{background:var(--code);padding:10px 12px;border-radius:8px;overflow-x:auto;margin:6px 0}
+pre code{background:none;padding:0}
+.badge{display:inline-block;min-width:3.6em;text-align:center;padding:1px 8px;border-radius:5px;font-weight:700;font-size:.78rem;color:#fff;margin-right:8px}
+.GET{background:#2f7d4f}.POST{background:#2a6fdb}
+details.ep{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:10px 0}
+details.ep>summary{cursor:pointer;padding:10px 14px;list-style:none;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 0}
+details.ep>summary::-webkit-details-marker{display:none}
+details.ep>summary::before{content:"\25B8";margin-right:8px;color:var(--muted)}
+details.ep[open]>summary::before{content:"\25BE"}
+details.ep .body{padding:0 14px 12px;border-top:1px solid var(--line)}
+.path{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;margin-right:10px}
+.sum{color:var(--muted);font-size:.92rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+img.chart{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:1px 9px;border-radius:999px;font-size:.8rem;font-weight:700;border:1.5px solid currentColor}
+.chip.ok{color:var(--ok)}.chip.warning{color:var(--warn)}.chip.drift{color:var(--bad)}
+.seg{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px}
+.seg button{font:inherit;font-size:.92rem;padding:7px 14px;border-radius:8px;border:1.5px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.seg button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;font-weight:700}
+.seg button:focus-visible,tr.sel:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+tbody tr.clickable{cursor:pointer}
+tbody tr.clickable:hover{background:var(--code)}
+tbody tr.selected{background:var(--code);font-weight:600}
+svg.hist{width:100%;height:auto;display:block}
+svg text{fill:var(--muted);font-size:11px;font-family:system-ui,sans-serif}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.88rem;color:var(--muted);margin:6px 0 0}
+.sw{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:.92rem;margin:0}
+.kv dt{color:var(--muted)}.kv dd{margin:0;overflow-wrap:anywhere}
+.note{font-size:.88rem;color:var(--muted)}
+.pill{font-size:.8rem;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--code);margin-left:6px}
+footer{padding:22px 0 40px;color:var(--muted);font-size:.88rem}
+</style>
+</head>
+<body>
+<header class="wrap">
+  <h1>ML model serving explorer</h1>
+  <p class="lead">A small California Housing model served with FastAPI, with checksum-verified versioned artifacts, Prometheus metrics, rate limiting and drift monitoring. This page is static: all numbers come from committed run files in this repository.</p>
+  <nav aria-label="Sections">
+    <a href="#model">Model</a><a href="#api">API</a><a href="#load">Load test</a><a href="#drift">Drift explorer</a>
+  </nav>
+</header>
+
+<main class="wrap" id="main">
+  <noscript><p class="card">This explorer needs JavaScript to render its tables and charts.</p></noscript>
+
+  <section id="model">
+    <h2>Model and registry</h2>
+    <p class="sub">The model is deliberately simple; the engineering around it is the point.</p>
+    <div id="model-root"></div>
+  </section>
+
+  <section id="api">
+    <h2>API reference</h2>
+    <p class="sub">Rendered from the OpenAPI document the service generates (<code>/openapi.json</code>). This page cannot send requests; run the service to try them.</p>
+    <div id="api-root"></div>
+  </section>
+
+  <section id="load">
+    <h2>Load test</h2>
+    <p class="sub" id="load-label"></p>
+    <div id="load-root"></div>
+  </section>
+
+  <section id="drift">
+    <h2>Drift explorer</h2>
+    <p class="sub" id="drift-note"></p>
+    <div id="drift-root"></div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>Original work &copy; Jane Rose Ferdinant, licensed CC BY-NC-ND 4.0. Third-party components retain their own licenses; see THIRD_PARTY_NOTICES.md in the repository.</p>
+</footer>
+
+<script src="data.js"></script>
+<script>
+(function () {
+  "use strict";
+  var D = window.EXPLORER_DATA;
+  if (!D) { document.getElementById("main").insertAdjacentHTML("afterbegin", "<p class='card'>data.js is missing. Run scripts/build_explorer.py.</p>"); return; }
+
+  function el(tag, attrs) {
+    var n = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === "text") n.textContent = attrs[k];
+      else if (k === "html") n.innerHTML = attrs[k];
+      else n.setAttribute(k, attrs[k]);
+    });
+    for (var i = 2; i < arguments.length; i++) {
+      var c = arguments[i];
+      if (c == null) continue;
+      n.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    }
+    return n;
+  }
+  function svg(tag, attrs) {
+    var n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    return n;
+  }
+  function table(caption, headers, rows) {
+    var tr = el("tr", {});
+    headers.forEach(function (h) { tr.appendChild(el("th", { scope: "col", text: h })); });
+    var thead = el("thead", {}, tr);
+    var tbody = el("tbody", {});
+    rows.forEach(function (r) { tbody.appendChild(r); });
+    var t = el("table", {}, el("caption", { text: caption, style: "position:absolute;left:-9999px" }), thead, tbody);
+    return el("div", { "class": "tablewrap" }, t);
+  }
+  function row(cells) {
+    var tr = el("tr", {});
+    cells.forEach(function (c) {
+      var td = el("td", {});
+      if (c instanceof Node) td.appendChild(c); else td.textContent = String(c);
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+  function num(v, d) { return Number(v).toLocaleString("en-US", { maximumFractionDigits: d == null ? 2 : d, minimumFractionDigits: d == null ? 0 : d }); }
+  function sig(v) { return Number(v).toPrecision(3).replace(/\.?0+$/, "").replace(/\.?0+e/, "e"); }
+
+  /* ------------------------------------------------------------------ model */
+  (function () {
+    var m = D.model, root = document.getElementById("model-root");
+    var t = m.metrics.test, b = m.metrics.baselines;
+    var grid = el("div", { "class": "grid2" });
+    var left = el("div", { "class": "card" },
+      el("h3", { text: "Production model: " + m.version, style: "margin-top:0" }),
+      el("dl", { "class": "kv" },
+        el("dt", { text: "Type" }), el("dd", { text: m.model_type + " (max_iter " + m.hyperparameters.max_iter + ", learning rate " + m.hyperparameters.learning_rate + ", max leaf nodes " + m.hyperparameters.max_leaf_nodes + ")" }),
+        el("dt", { text: "Target" }), el("dd", { text: m.target.name + ", unit " + m.target.unit }),
+        el("dt", { text: "Seed / split" }), el("dd", { text: "seed " + m.seed + ", " + num(m.metrics.n_train) + " train / " + num(m.metrics.n_test) + " held-out rows" }),
+        el("dt", { text: "Trained" }), el("dd", { text: m.trained_at + " at git commit " + m.git.commit.slice(0, 10) + (m.git.dirty ? " (dirty tree)" : "") }),
+        el("dt", { text: "Model SHA-256" }), el("dd", {}, el("code", { text: m.model_sha256.slice(0, 24) + "..." })),
+        el("dt", { text: "Data" }), el("dd", { text: m.dataset.name + ", " + num(m.dataset.n_rows) + " block groups (1990 U.S. Census); downloaded at run time, not stored here. Licence: " + m.dataset.license })
+      ));
+    var metricRows = [
+      row(["Gradient boosting (" + m.version + ")", sig(t.rmse), sig(t.rmse_ci95[0]) + " to " + sig(t.rmse_ci95[1]), sig(t.mae), sig(t.r2)]),
+      row(["Ridge baseline", sig(b.ridge.rmse), "", sig(b.ridge.mae), sig(b.ridge.r2)]),
+      row(["Mean baseline", sig(b.mean.rmse), "", sig(b.mean.mae), sig(b.mean.r2)])
+    ];
+    var right = el("div", {},
+      el("h3", { text: "Held-out test metrics (target units of USD 100,000)", style: "margin-top:0" }),
+      table("Test metrics", ["Model", "RMSE", "RMSE 95% CI (bootstrap)", "MAE", "R2"], metricRows),
+      el("p", { "class": "note", text: "Single seeded split; the interval is a bootstrap over the " + num(m.metrics.n_test) + " test rows and does not include training variance." }));
+    grid.appendChild(left); grid.appendChild(right);
+    root.appendChild(grid);
+    var vrows = m.versions.map(function (v) {
+      return row([v.version, v.stage, v.created_at || "-"]);
+    });
+    root.appendChild(el("h3", { text: "Registry (models/registry.json)" }));
+    root.appendChild(table("Registered versions", ["Version", "Stage", "Created (UTC)"], vrows));
+    var hist = m.history.map(function (h) { return row([h.at, h.action, h.version, h.previous || "-"]); });
+    root.appendChild(el("h3", { text: "Registry history" }));
+    root.appendChild(table("Registry history", ["At (UTC)", "Action", "Version", "Previous production"], hist));
+  })();
+
+  /* ------------------------------------------------------------------ API */
+  (function () {
+    var spec = D.openapi, root = document.getElementById("api-root");
+    function nameOf(ref) { return ref.split("/").pop(); }
+    function deref(s) { return s && s.$ref ? deref(spec.components.schemas[nameOf(s.$ref)]) : s; }
+    function typeOf(s) {
+      if (!s) return "";
+      if (s.$ref) return nameOf(s.$ref);
+      if (s.anyOf) return s.anyOf.map(typeOf).join(" | ");
+      if (s.type === "array") return "array of " + typeOf(s.items);
+      return s.type || "object";
+    }
+    function example(s) {
+      s = deref(s);
+      if (!s) return null;
+      if (s.examples && s.examples.length) return s.examples[0];
+      if (s.default !== undefined) return s.default;
+      if (s.anyOf) { var f = s.anyOf.filter(function (x) { return x.type !== "null"; })[0]; return example(f); }
+      if (s.type === "object" || s.properties) { var o = {}; Object.keys(s.properties || {}).forEach(function (k) { o[k] = example(s.properties[k]); }); return o; }
+      if (s.type === "array") return [example(s.items)];
+      if (s.type === "string") return "string";
+      if (s.type === "integer" || s.type === "number") return 0;
+      if (s.type === "boolean") return true;
+      return null;
+    }
+    function schemaRows(schema, prefix, out) {
+      var s = deref(schema);
+      if (!s || !s.properties) return out;
+      var req = s.required || [];
+      Object.keys(s.properties).forEach(function (k) {
+        var p = s.properties[k], d = deref(p) || {};
+        var ex = d.examples && d.examples.length ? JSON.stringify(d.examples[0]) : "";
+        out.push(row([prefix + k, typeOf(p), req.indexOf(k) >= 0 ? "yes" : "no", ex, el("span", { text: d.description || p.description || "", style: "white-space:normal" })]));
+        var inner = p.type === "array" ? p.items : p;
+        if (inner && (inner.$ref) && (p.type === "array" || p.$ref)) schemaRows(inner, prefix + k + (p.type === "array" ? "[]." : "."), out);
+      });
+      return out;
+    }
+    function curl(method, path, body, needsKey) {
+      var c = "curl";
+      if (method === "post") c += " -X POST";
+      c += " http://127.0.0.1:8000" + path;
+      if (body !== undefined) c += " \\\n  -H \"Content-Type: application/json\" \\\n  -d '" + JSON.stringify(body) + "'";
+      return c;
+    }
+    var info = spec.info;
+    root.appendChild(el("p", { "class": "note", text: info.title + " " + info.version + ". Authentication is optional: when MLS_API_KEY is set, inference and /model-info need an X-API-Key header; probes and /metrics stay open." }));
+    var first = true;
+    Object.keys(spec.paths).forEach(function (path) {
+      Object.keys(spec.paths[path]).forEach(function (method) {
+        var op = spec.paths[path][method];
+        var d = el("details", { "class": "ep" });
+        if (first) { d.setAttribute("open", ""); first = false; }
+        d.appendChild(el("summary", {}, el("span", { "class": "badge " + method.toUpperCase(), text: method.toUpperCase() }), el("span", { "class": "path", text: path }), el("span", { "class": "sum", text: op.summary || "" })));
+        var body = el("div", { "class": "body" });
+        var params = (op.parameters || []);
+        if (params.length) {
+          body.appendChild(el("h3", { text: "Parameters" }));
+          body.appendChild(table("Parameters", ["Name", "In", "Type", "Required"], params.map(function (p) { return row([p.name, p.in, typeOf(p.schema), p.required ? "yes" : "no"]); })));
+        }
+        var rb = op.requestBody && op.requestBody.content && op.requestBody.content["application/json"];
+        var reqExample;
+        if (rb) {
+          body.appendChild(el("h3", { text: "Request body: " + typeOf(rb.schema) }));
+          body.appendChild(table("Request fields", ["Field", "Type", "Required", "Example", "Description"], schemaRows(rb.schema, "", [])));
+          reqExample = example(rb.schema);
+          body.appendChild(el("h3", { text: "Example request" }));
+          body.appendChild(el("pre", {}, el("code", { text: curl(method, path, reqExample) })));
+        } else {
+          body.appendChild(el("h3", { text: "Example request" }));
+          body.appendChild(el("pre", {}, el("code", { text: curl(method, path) })));
+        }
+        body.appendChild(el("h3", { text: "Responses" }));
+        var rr = Object.keys(op.responses || {}).map(function (code) {
+          var r = op.responses[code], c = r.content && (r.content["application/json"] || r.content["text/plain"]);
+          return row([code, el("span", { text: r.description || "", style: "white-space:normal" }), c && c.schema ? typeOf(c.schema) : (r.content ? Object.keys(r.content)[0] : "")]);
+        });
+        body.appendChild(table("Responses", ["Status", "Meaning", "Schema"], rr));
+        var ok = op.responses && (op.responses["200"] || op.responses["201"]);
+        var okSchema = ok && ok.content && ok.content["application/json"] && ok.content["application/json"].schema;
+        if (okSchema && deref(okSchema) && deref(okSchema).properties) {
+          body.appendChild(el("h3", { text: "Response fields: " + typeOf(okSchema) }));
+          body.appendChild(table("Response fields", ["Field", "Type", "Required", "Example", "Description"], schemaRows(okSchema, "", [])));
+        }
+        d.appendChild(body);
+        root.appendChild(d);
+      });
+    });
+  })();
+
+  /* ------------------------------------------------------------------ load test */
+  (function () {
+    var L = D.loadtest, root = document.getElementById("load-root");
+    document.getElementById("load-label").textContent = "Verified (run " + L.date + ", " + L.hardware + "). Measured on this machine with the settings below; not a statement about production capacity.";
+    var imgs = el("div", { "class": "grid2" },
+      el("img", { "class": "chart", src: "img/loadtest-throughput.png", alt: "Bar chart of requests per second for 1 and 4 uvicorn workers, for single-row and batch requests at two concurrency levels.", width: "1280", height: "672" }),
+      el("img", { "class": "chart", src: "img/loadtest-latency.png", alt: "Bar charts of p50, p95 and p99 latency in milliseconds by worker count and concurrency, for single-row and batch requests.", width: "1440", height: "672" }));
+    root.appendChild(imgs);
+    root.appendChild(el("h3", { text: "Results (median of " + L.settings.repetitions + " repetitions of " + L.settings.duration_seconds_per_rep + " s each)" }));
+    var rows = L.runs.map(function (r) {
+      var s = r.summary;
+      return row([r.workers, r.scenario === "single" ? "1 row" : r.rows_per_request + " rows", r.concurrency,
+        num(s.throughput_rps_median, 1) + " (" + num(s.throughput_rps_min, 0) + " to " + num(s.throughput_rps_max, 0) + ")",
+        num(s.throughput_rps_median * r.rows_per_request, 0),
+        num(s.p50_ms_median, 2), num(s.p95_ms_median, 2), num(s.p99_ms_median, 2), s.errors_total]);
+    });
+    root.appendChild(table("Load test results", ["Workers", "Request", "Connections", "Requests/s (min to max)", "Rows/s", "p50 ms", "p95 ms", "p99 ms", "Errors"], rows));
+    var S = L.settings;
+    root.appendChild(el("h3", { text: "Settings and caveats" }));
+    root.appendChild(el("div", { "class": "card" }, el("dl", { "class": "kv" },
+      el("dt", { text: "Hardware" }), el("dd", { text: L.hardware + " (" + L.logical_cpus + " logical CPUs), " + L.platform }),
+      el("dt", { text: "Software" }), el("dd", { text: "Python " + L.python + ", scikit-learn " + L.scikit_learn }),
+      el("dt", { text: "Server" }), el("dd", { text: S.server }),
+      el("dt", { text: "App config" }), el("dd", { text: S.app_config }),
+      el("dt", { text: "Client" }), el("dd", { text: S.client }),
+      el("dt", { text: "Payloads" }), el("dd", { text: S.payloads }),
+      el("dt", { text: "Caveats" }), el("dd", { text: "Client and server share one machine and compete for CPU. The loop is closed (each connection waits for its reply), so latency reflects saturation at that concurrency, not an arrival-rate model. Results will differ on other hardware." }))));
+    var P = D.latency;
+    root.appendChild(el("h3", { text: "Where the time goes: predict() micro-benchmark (no HTTP)" }));
+    var prow = P.rows.map(function (r) { return row([r.max_iter, r.threads === "default" ? "scikit-learn default" : r.threads, r.rows, num(r.median_ms, 2), num(r.p95_ms, 2)]); });
+    root.appendChild(table("Predict latency", ["Boosting iterations", "OpenMP threads", "Rows", "Median ms", "p95 ms"], prow));
+    root.appendChild(el("p", { "class": "note", text: "Verified (run " + P.date + ", " + P.hardware + "). For tiny inputs, scikit-learn's default threading costs more than it saves, so the service pins prediction to one thread per worker (MLS_PREDICT_THREADS=1) and scales with worker processes instead." }));
+  })();
+
+  /* ------------------------------------------------------------------ drift */
+  (function () {
+    var G = D.drift, root = document.getElementById("drift-root");
+    document.getElementById("drift-note").textContent = "Simulated, precomputed (" + G.generated + "). " + G.note + " Model " + G.model_version + ", " + num(G.rows_per_window) + " rows per window.";
+    var state = { sc: 0, feat: 0 };
+    var seg = el("div", { "class": "seg", role: "group", "aria-label": "Drift scenario" });
+    var summary = el("div", { "class": "card", "aria-live": "polite" });
+    var tableHost = el("div", {});
+    var chartHost = el("div", { "class": "card" });
+    root.appendChild(seg); root.appendChild(summary);
+    root.appendChild(el("h3", { text: "Per-feature statistics (select a row to see its distribution)" }));
+    root.appendChild(tableHost); root.appendChild(el("h3", { text: "Distribution: training reference vs current window", id: "chart-title" })); root.appendChild(chartHost);
+    var ICON = { ok: "●", warning: "▲", drift: "■" };
+    function chip(status) { return el("span", { "class": "chip " + status, text: ICON[status] + " " + status }); }
+
+    function renderChart(f) {
+      chartHost.textContent = "";
+      var h = f.histogram, W = 640, H = 230, ml = 44, mr = 10, mt = 10, mb = 36, n = h.reference.length;
+      var top = Math.max.apply(null, h.reference.concat(h.current)) * 1.08 || 1;
+      var s = svg("svg", { "class": "hist", viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": f.name + ": reference (grey) versus current (blue) distribution, PSI " + f.psi.toFixed(3) + ", status " + f.status });
+      var bw = (W - ml - mr) / n;
+      for (var g = 0; g <= 4; g++) {
+        var y = mt + (H - mt - mb) * (1 - g / 4);
+        s.appendChild(svg("line", { x1: ml, x2: W - mr, y1: y, y2: y, stroke: "var(--line)", "stroke-width": 1 }));
+        var t = svg("text", { x: ml - 6, y: y + 4, "text-anchor": "end" }); t.textContent = (top * g / 4 * 100).toFixed(0) + "%"; s.appendChild(t);
+      }
+      for (var i = 0; i < n; i++) {
+        var hr = (H - mt - mb) * h.reference[i] / top, hc = (H - mt - mb) * h.current[i] / top;
+        s.appendChild(svg("rect", { x: ml + i * bw + 1, y: H - mb - hr, width: Math.max(bw - 2, 1), height: hr, fill: "var(--ref)", "fill-opacity": 0.55 }));
+        s.appendChild(svg("rect", { x: ml + i * bw + 1, y: H - mb - hc, width: Math.max(bw - 2, 1), height: hc, fill: "var(--cur)", "fill-opacity": 0.45, stroke: "var(--cur)", "stroke-width": 1.2 }));
+      }
+      [0, 0.25, 0.5, 0.75, 1].forEach(function (p) {
+        var v = h.edges[0] + (h.edges[h.edges.length - 1] - h.edges[0]) * p;
+        var tx = svg("text", { x: ml + (W - ml - mr) * p, y: H - mb + 16, "text-anchor": p === 0 ? "start" : p === 1 ? "end" : "middle" });
+        tx.textContent = sig(v); s.appendChild(tx);
+      });
+      var lbl = svg("text", { x: ml, y: H - 4 }); lbl.textContent = f.name + " (share of rows per bin; values beyond the 0.5th and 99.5th percentiles are folded into the end bins)"; lbl.setAttribute("style", "font-size:10px"); s.appendChild(lbl);
+      chartHost.appendChild(s);
+      chartHost.appendChild(el("div", { "class": "legend" },
+        el("span", {}, el("span", { "class": "sw", style: "background:var(--ref);opacity:.6" }), "Training reference (quantile sketch)"),
+        el("span", {}, el("span", { "class": "sw", style: "background:var(--cur);opacity:.6;border:1px solid var(--cur)" }), "Current window")));
+      document.getElementById("chart-title").textContent = "Distribution of " + f.name + ": training reference vs current window";
+    }
+
+    function render() {
+      var sc = G.scenarios[state.sc], rep = sc.report;
+      Array.prototype.forEach.call(seg.children, function (b, i) { b.setAttribute("aria-pressed", String(i === state.sc)); });
+      summary.textContent = "";
+      summary.appendChild(el("div", {}, el("strong", { text: sc.name + ": " }), chip(rep.overall_status)));
+      summary.appendChild(el("p", { "class": "note", style: "margin:6px 0 0", text: sc.description + " Drift (PSI >= " + rep.thresholds.psi_drift + "): " + (rep.drifted_features.join(", ") || "none") + ". Warnings (PSI >= " + rep.thresholds.psi_warn + " or KS p < " + rep.thresholds.ks_alpha_bonferroni.toExponential(1) + "): " + (rep.warning_features.join(", ") || "none") + "." }));
+      var rows = rep.features.map(function (f, i) {
+        var tr = row([f.name, chip(f.status), f.psi.toFixed(3), f.ks_statistic.toFixed(3), f.ks_pvalue < 0.001 ? f.ks_pvalue.toExponential(1) : f.ks_pvalue.toFixed(3), sig(f.reference.mean) + " / " + sig(f.reference.std), sig(f.current.mean) + " / " + sig(f.current.std)]);
+        tr.className = "clickable" + (i === state.feat ? " selected" : "");
+        tr.tabIndex = 0;
+        tr.setAttribute("aria-label", "Show distribution of " + f.name);
+        function pick() { state.feat = i; render(); }
+        tr.addEventListener("click", pick);
+        tr.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+        return tr;
+      });
+      tableHost.textContent = "";
+      tableHost.appendChild(table("Per-feature drift statistics", ["Feature", "Status", "PSI", "KS stat", "KS p", "Reference mean / sd", "Current mean / sd"], rows));
+      renderChart(rep.features[state.feat]);
+    }
+    G.scenarios.forEach(function (sc, i) {
+      var b = el("button", { type: "button", text: sc.name, "aria-pressed": "false" });
+      b.addEventListener("click", function () { state.sc = i; render(); });
+      seg.appendChild(b);
+    });
+    render();
+    var C = G.calibration;
+    root.appendChild(el("h3", { text: "Sensitivity: how often a window is flagged" }));
+    root.appendChild(table("Detection rate by shift size", ["MedInc shift (training sd)", "Flagged (warning or drift)", "Flagged as drift"],
+      C.rows.map(function (r) { return row([r.shift_sd === 0 ? "0 (unchanged windows)" : r.shift_sd, num(r.flagged_warning_or_drift * 100, 1) + "%", num(r.flagged_drift * 100, 1) + "%"]); })));
+    root.appendChild(el("p", { "class": "note", text: num(C.windows_per_shift) + " windows per row. " + C.note + " Zero of " + num(C.windows_per_shift) + " unchanged windows were flagged, so the false-alarm rate on this data is below about " + num(300 / C.windows_per_shift, 1) + "% (95% upper bound, rule of three); it says nothing about other data." }));
+    root.appendChild(el("p", { "class": "note", html: "The full self-contained report for the strong scenario is <a href=\"drift_report_strong.html\">drift_report_strong.html</a>. KS tests treat the reference as 1,001 equal-weight quantile points, which makes p-values conservative." }));
+  })();
+})();
+</script>
+</body>
+</html>

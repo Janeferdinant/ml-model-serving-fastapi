@@ -18,7 +18,6 @@ import json
 import multiprocessing as mp
 import os
 import platform
-import signal
 import statistics
 import subprocess
 import sys
@@ -30,6 +29,7 @@ from typing import Any
 
 import aiohttp
 import numpy as np
+import psutil
 
 from mlserving import registry
 
@@ -66,7 +66,7 @@ def make_payloads(seed: int, n: int, batch: int) -> tuple[list[bytes], list[byte
 
 
 async def _client(
-    url: str, bodies: list[bytes], deadline: float, lat: list[float], errors: list[int]
+    url: str, bodies: list[bytes], deadline: float, lat: list[float], errors: dict[str, int]
 ) -> None:
     timeout = aiohttp.ClientTimeout(total=30)
     connector = aiohttp.TCPConnector(limit=0)
@@ -77,26 +77,28 @@ async def _client(
             body = bodies[i % len(bodies)]
             i += 1
             start = time.perf_counter()
+            kind = None
             try:
                 async with session.post(url, data=body, headers=headers) as resp:
                     await resp.read()
-                    ok = resp.status == 200
-            except (aiohttp.ClientError, TimeoutError):
-                ok = False
+                    if resp.status != 200:
+                        kind = f"http_{resp.status}"
+            except (aiohttp.ClientError, TimeoutError) as exc:
+                kind = type(exc).__name__
             elapsed = time.perf_counter() - start
-            if ok:
+            if kind is None:
                 lat.append(elapsed)
             else:
-                errors[0] += 1
+                errors[kind] = errors.get(kind, 0) + 1
 
 
 async def _run_async(url: str, bodies: list[bytes], tasks: int, seconds: float) -> dict[str, Any]:
     lat: list[float] = []
-    errors = [0]
+    errors: dict[str, int] = {}
     t0 = time.perf_counter()
     deadline = t0 + seconds
     await asyncio.gather(*[_client(url, bodies, deadline, lat, errors) for _ in range(tasks)])
-    return {"latencies": lat, "errors": errors[0], "wall": time.perf_counter() - t0}
+    return {"latencies": lat, "errors": errors, "wall": time.perf_counter() - t0}
 
 
 def _worker(args: tuple[str, list[bytes], int, float]) -> dict[str, Any]:
@@ -109,15 +111,23 @@ def run_load(
 ) -> dict[str, Any]:
     per_proc = [concurrency // procs + (1 if i < concurrency % procs else 0) for i in range(procs)]
     jobs = [(url, bodies, t, seconds) for t in per_proc if t > 0]
+    psutil.cpu_percent(interval=None)  # reset the system-wide CPU counter
     results = pool.map(_worker, jobs)
+    system_cpu = psutil.cpu_percent(interval=None)
     lat = np.concatenate([np.asarray(r["latencies"], dtype=float) for r in results])
     wall = max(r["wall"] for r in results)
-    errors = sum(r["errors"] for r in results)
+    kinds: dict[str, int] = {}
+    for r in results:
+        for k, v in r["errors"].items():
+            kinds[k] = kinds.get(k, 0) + v
+    errors = sum(kinds.values())
     ms = lat * 1000.0
     return {
         "requests_ok": int(lat.size),
         "errors": int(errors),
+        "error_kinds": kinds,
         "wall_seconds": round(wall, 3),
+        "system_cpu_percent": system_cpu,
         "throughput_rps": round(lat.size / wall, 1),
         "latency_ms": {
             "p50": round(float(np.percentile(ms, 50)), 3),
@@ -127,6 +137,20 @@ def run_load(
             "mean": round(float(ms.mean()), 3),
         },
     }
+
+
+def wait_quiet(threshold: float, deadline: float) -> float:
+    """Wait until system-wide CPU use stays below ``threshold`` percent (other jobs may share
+    this machine) or the shared ``deadline`` (monotonic seconds) passes. Returns the last
+    measured background utilisation."""
+    calm = 0
+    last = 0.0
+    while True:
+        last = psutil.cpu_percent(interval=2.0)
+        calm = calm + 1 if last < threshold else 0
+        if calm >= 3 or time.monotonic() > deadline:
+            return float(last)
+        print(f"  waiting for a quiet machine (CPU {last:.0f}%)", flush=True)
 
 
 def start_server(workers: int, port: int) -> subprocess.Popen[bytes]:
@@ -147,29 +171,23 @@ def start_server(workers: int, port: int) -> subprocess.Popen[bytes]:
         str(workers),
         "--no-access-log",
     ]
-    flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
-    return subprocess.Popen(
-        cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags
-    )
+    return subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def stop_server(proc: subprocess.Popen[bytes]) -> None:
-    """Stop only the server this script started (by PID, with its worker processes)."""
+    """Stop only the server this script started, by PID, together with its worker processes."""
     if proc.poll() is not None:
         return
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, check=False
+        )
+    else:
+        proc.terminate()
     try:
-        if sys.platform == "win32":
-            os.kill(proc.pid, signal.CTRL_BREAK_EVENT)
-        else:
-            proc.send_signal(signal.SIGTERM)
         proc.wait(timeout=20)
-    except (subprocess.TimeoutExpired, OSError):
-        if sys.platform == "win32":
-            subprocess.run(
-                ["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, check=False
-            )
-        else:
-            proc.kill()
+    except subprocess.TimeoutExpired:
+        proc.kill()
         proc.wait(timeout=20)
 
 
@@ -186,6 +204,14 @@ def wait_ready(port: int, workers: int, timeout: float = 90.0) -> None:
             return
         time.sleep(0.3)
     raise SystemExit("server did not become ready")
+
+
+def merge_kinds(reps: list[dict[str, Any]]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for r in reps:
+        for k, v in r["error_kinds"].items():
+            out[k] = out.get(k, 0) + v
+    return out
 
 
 def summarise(reps: list[dict[str, Any]]) -> dict[str, Any]:
@@ -207,6 +233,7 @@ def summarise(reps: list[dict[str, Any]]) -> dict[str, Any]:
         "p95_ms_median": med(("latency_ms", "p95")),
         "p99_ms_median": med(("latency_ms", "p99")),
         "errors_total": sum(r["errors"] for r in reps),
+        "error_kinds": merge_kinds(reps),
     }
 
 
@@ -224,6 +251,18 @@ def main() -> int:
     ap.add_argument("--client-procs", type=int, default=4)
     ap.add_argument("--port", type=int, default=8811)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument(
+        "--wait-quiet",
+        type=float,
+        default=0.0,
+        help="before each cell wait until background CPU is below this percent",
+    )
+    ap.add_argument(
+        "--wait-budget",
+        type=float,
+        default=1800.0,
+        help="total seconds the run may spend waiting for a quiet machine",
+    )
     ap.add_argument("--hardware", default="unspecified")
     ap.add_argument("--out", type=Path, default=ROOT / "docs" / "runs")
     ap.add_argument("--name", default=None, help="output file stem (default: <date>-loadtest)")
@@ -235,7 +274,41 @@ def main() -> int:
     bodies = {"single": single, "batch": batches}
     paths = {"single": "/predict", "batch": "/predict/batch"}
 
-    runs: list[dict[str, Any]] = []
+    import sklearn
+
+    version = registry.resolve_version(ROOT / "models", "production")
+    result: dict[str, Any] = {
+        "date": f"{started:%Y-%m-%d}",
+        "started_utc": started.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "hardware": args.hardware,
+        "logical_cpus": os.cpu_count(),
+        "platform": platform.platform(),
+        "python": platform.python_version(),
+        "scikit_learn": sklearn.__version__,
+        "settings": {
+            "server": "uvicorn --factory mlserving.app:create_app --no-access-log, 127.0.0.1",
+            "app_config": "MLS_RATE_LIMIT_PER_MINUTE=0 (limiter off), auth off, request log off, "
+            "JSON access log on (stdout discarded), MLS_PREDICT_THREADS=1 (default)",
+            "model": f"{version} (production)",
+            "client": f"aiohttp, {args.client_procs} client processes on the same machine, "
+            "keep-alive connections, closed loop (no think time)",
+            "duration_seconds_per_rep": args.duration,
+            "warmup_seconds": args.warmup,
+            "repetitions": args.reps,
+            "batch_size": args.batch_size,
+            "payloads": "500 pre-serialised bodies drawn from N(mean, std) clipped to the "
+            "training range, seed " + str(args.seed),
+        },
+        "runs": [],
+    }
+    args.out.mkdir(parents=True, exist_ok=True)
+    out = args.out / f"{stem}.json"
+    runs: list[dict[str, Any]] = result["runs"]
+
+    def save() -> None:
+        out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+    quiet_deadline = time.monotonic() + args.wait_budget
     ctx = mp.get_context("spawn")
     with ctx.Pool(processes=args.client_procs) as pool:
         for workers in args.workers:
@@ -246,6 +319,9 @@ def main() -> int:
                 run_load(pool, base + "/predict", single, 8, args.client_procs, args.warmup)
                 for scenario in args.scenarios:
                     for conc in args.concurrency:
+                        background = (
+                            wait_quiet(args.wait_quiet, quiet_deadline) if args.wait_quiet else None
+                        )
                         reps = [
                             run_load(
                                 pool,
@@ -262,10 +338,12 @@ def main() -> int:
                             "scenario": scenario,
                             "rows_per_request": 1 if scenario == "single" else args.batch_size,
                             "concurrency": conc,
+                            "background_cpu_percent_before": background,
                             "repetitions": reps,
                             "summary": summarise(reps),
                         }
                         runs.append(entry)
+                        save()
                         s = entry["summary"]
                         print(
                             f"workers={workers} {scenario:<6} conc={conc:<4} "
@@ -279,35 +357,6 @@ def main() -> int:
                 stop_server(server)
                 time.sleep(2)
 
-    import sklearn
-
-    result = {
-        "date": f"{started:%Y-%m-%d}",
-        "started_utc": started.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "hardware": args.hardware,
-        "logical_cpus": os.cpu_count(),
-        "platform": platform.platform(),
-        "python": platform.python_version(),
-        "scikit_learn": sklearn.__version__,
-        "settings": {
-            "server": "uvicorn --factory mlserving.app:create_app --no-access-log, 127.0.0.1",
-            "app_config": "MLS_RATE_LIMIT_PER_MINUTE=0 (limiter off), auth off, request log off, "
-            "JSON access log on (stdout discarded), MLS_PREDICT_THREADS=1 (default)",
-            "model": "v1 (production)",
-            "client": f"aiohttp, {args.client_procs} client processes on the same machine, "
-            "keep-alive connections, closed loop (no think time)",
-            "duration_seconds_per_rep": args.duration,
-            "warmup_seconds": args.warmup,
-            "repetitions": args.reps,
-            "batch_size": args.batch_size,
-            "payloads": "500 pre-serialised bodies drawn from N(mean, std) clipped to the "
-            "training range, seed " + str(args.seed),
-        },
-        "runs": runs,
-    }
-    args.out.mkdir(parents=True, exist_ok=True)
-    out = args.out / f"{stem}.json"
-    out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {out}")
     return 0
 

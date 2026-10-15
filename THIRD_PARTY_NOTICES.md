@@ -34,6 +34,7 @@ Original work in this repository is (c) Jane Rose Ferdinant, licensed CC BY-NC-N
 | pip-audit | 2.10.1 | Apache-2.0 |
 | pre-commit | 4.7.0 | MIT |
 | aiohttp | 3.14.5 | Apache-2.0 and MIT |
+| psutil | 7.2.2 | BSD-3-Clause |
 | matplotlib | 3.11.2 | Matplotlib license (PSF-based) |
 
 Licenses were read from each installed package's metadata on 2026-10-15.
