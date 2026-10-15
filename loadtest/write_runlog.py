@@ -67,10 +67,21 @@ def main() -> int:
             f"| {m['p50_ms_median']:.2f} | {m['p95_ms_median']:.2f} | {m['p99_ms_median']:.2f} "
             f"| {m['errors_total']}{' (' + kinds + ')' if kinds else ''} |"
         )
+    busiest = max(
+        (rep.get("system_cpu_percent", 0.0) for r in d["runs"] for rep in r["repetitions"]),
+        default=0.0,
+    )
     lines += [
         "",
         "## Caveats",
         "",
+        f"- **Shared machine.** System-wide CPU use measured during the repetitions peaked at "
+        f"{busiest:.0f}% (it includes the load test itself); other jobs on the machine kept it "
+        "saturated before every cell as well (`background_cpu_percent_before` in the JSON), and "
+        "waiting for a quiet period was not possible. Absolute numbers are therefore lower and "
+        "noisier than an idle machine would give, and the gain from 1 to 4 workers is understated."
+        if busiest >= 95
+        else "- System CPU stayed below 95% during the repetitions.",
         "- Client and server run on the same machine and compete for CPU.",
         "- The load is closed loop: each connection waits for its reply before sending the next "
         "request, so latency reflects saturation at that concurrency, not a fixed arrival rate.",

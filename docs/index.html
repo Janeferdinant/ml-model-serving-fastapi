@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ML model serving explorer</title>
+<link rel="icon" href="data:,">
 <meta name="description" content="Static explorer for the ml-model-serving-fastapi project: API reference, load-test results and a drift report explorer. Opens from disk; no server and no network.">
 <style>
 :root{
@@ -52,8 +53,9 @@ details.ep[open]>summary::before{content:"\25BE"}
 details.ep .body{padding:0 14px 12px;border-top:1px solid var(--line)}
 .path{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;margin-right:10px}
 .sum{color:var(--muted);font-size:.92rem}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.grid2>*{min-width:0}
+@media (max-width:760px){.grid2{grid-template-columns:minmax(0,1fr)}.kv{grid-template-columns:minmax(0,1fr)}.kv dd{margin-bottom:6px}}
 img.chart{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
 .chip{display:inline-flex;align-items:center;gap:5px;padding:1px 9px;border-radius:999px;font-size:.8rem;font-weight:700;border:1.5px solid currentColor}
 .chip.ok{color:var(--ok)}.chip.warning{color:var(--warn)}.chip.drift{color:var(--bad)}
@@ -161,7 +163,7 @@ footer{padding:22px 0 40px;color:var(--muted);font-size:.88rem}
     return tr;
   }
   function num(v, d) { return Number(v).toLocaleString("en-US", { maximumFractionDigits: d == null ? 2 : d, minimumFractionDigits: d == null ? 0 : d }); }
-  function sig(v) { return Number(v).toPrecision(3).replace(/\.?0+$/, "").replace(/\.?0+e/, "e"); }
+  function sig(v) { return Number(v).toLocaleString("en-US", { maximumSignificantDigits: 3 }); }
 
   /* ------------------------------------------------------------------ model */
   (function () {
@@ -315,7 +317,7 @@ footer{padding:22px 0 40px;color:var(--muted);font-size:.88rem}
       el("dt", { text: "App config" }), el("dd", { text: S.app_config }),
       el("dt", { text: "Client" }), el("dd", { text: S.client }),
       el("dt", { text: "Payloads" }), el("dd", { text: S.payloads }),
-      el("dt", { text: "Caveats" }), el("dd", { text: "Client and server share one machine and compete for CPU. The loop is closed (each connection waits for its reply), so latency reflects saturation at that concurrency, not an arrival-rate model. Results will differ on other hardware." }))));
+      el("dt", { text: "Caveats" }), el("dd", { text: (L.runs.some(function (r) { return r.repetitions.some(function (p) { return p.system_cpu_percent >= 95; }); }) ? "Shared machine: other jobs kept system CPU at about 100% throughout, so absolute numbers are lower and noisier than on an idle machine and the gain from 1 to 4 workers is understated. " : "") + "Client and server share one machine and compete for CPU. The loop is closed (each connection waits for its reply), so latency reflects saturation at that concurrency, not an arrival-rate model. Results will differ on other hardware." }))));
     var P = D.latency;
     root.appendChild(el("h3", { text: "Where the time goes: predict() micro-benchmark (no HTTP)" }));
     var prow = P.rows.map(function (r) { return row([r.max_iter, r.threads === "default" ? "scikit-learn default" : r.threads, r.rows, num(r.median_ms, 2), num(r.p95_ms, 2)]); });
@@ -326,7 +328,7 @@ footer{padding:22px 0 40px;color:var(--muted);font-size:.88rem}
   /* ------------------------------------------------------------------ drift */
   (function () {
     var G = D.drift, root = document.getElementById("drift-root");
-    document.getElementById("drift-note").textContent = "Simulated, precomputed (" + G.generated + "). " + G.note + " Model " + G.model_version + ", " + num(G.rows_per_window) + " rows per window.";
+    document.getElementById("drift-note").textContent = "Precomputed on " + G.generated + ". " + G.note + " Model " + G.model_version + ", " + num(G.rows_per_window) + " rows per window.";
     var state = { sc: 0, feat: 0 };
     var seg = el("div", { "class": "seg", role: "group", "aria-label": "Drift scenario" });
     var summary = el("div", { "class": "card", "aria-live": "polite" });

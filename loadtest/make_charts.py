@@ -43,7 +43,11 @@ def main() -> int:
     concs = sorted({r["concurrency"] for r in runs})
     scenarios = [s for s in ("single", "batch") if any(r["scenario"] == s for r in runs)]
     get = {(r["workers"], r["scenario"], r["concurrency"]): r["summary"] for r in runs}
-    title_note = f"{data['hardware']}; run {data['date']}"
+    busiest = max(
+        (rep.get("system_cpu_percent", 0.0) for r in runs for rep in r["repetitions"]), default=0.0
+    )
+    hw = data["hardware"].split(" (")[0]
+    shared = " Machine CPU-saturated by other jobs." if busiest >= 95 else ""
     out_dir = ROOT / "docs" / "img"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -83,7 +87,7 @@ def main() -> int:
     fig.text(
         0.01,
         0.01,
-        f"Verified (run {data['date']}, {data['hardware']}). Bars: median; whiskers: min to max.",
+        f"Verified (run {data['date']}, {hw}). Median; whiskers min to max.{shared}",
         fontsize=7,
         color="#555",
     )
@@ -115,7 +119,7 @@ def main() -> int:
     fig.text(
         0.01,
         0.01,
-        f"Verified (run {title_note}). Client on the same machine; closed loop.",
+        f"Verified (run {data['date']}, {hw}). Closed loop, client on same host.{shared}",
         fontsize=7,
         color="#555",
     )
