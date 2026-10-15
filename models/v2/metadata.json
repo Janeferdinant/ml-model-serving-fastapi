@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "version": "v2",
+  "model_type": "HistGradientBoostingRegressor",
+  "task": "regression",
+  "target": {
+    "name": "MedHouseVal",
+    "unit": "100000 USD"
+  },
+  "feature_names": [
+    "MedInc",
+    "HouseAge",
+    "AveRooms",
+    "AveBedrms",
+    "Population",
+    "AveOccup",
+    "Latitude",
+    "Longitude"
+  ],
+  "feature_schema": [
+    {
+      "name": "MedInc",
+      "dtype": "float64",
+      "min": 0.4999,
+      "max": 15.0001,
+      "mean": 3.88075425750969,
+      "std": 1.9042362577470788,
+      "description": "Median income in the block group (tens of thousands of USD)."
+    },
+    {
+      "name": "HouseAge",
+      "dtype": "float64",
+      "min": 1.0,
+      "max": 52.0,
+      "mean": 28.60828488372093,
+      "std": 12.602117730095301,
+      "description": "Median house age in the block group (years)."
+    },
+    {
+      "name": "AveRooms",
+      "dtype": "float64",
+      "min": 0.8888888888888888,
+      "max": 141.9090909090909,
+      "mean": 5.4352350204875295,
+      "std": 2.387302579723395,
+      "description": "Average number of rooms per household."
+    },
+    {
+      "name": "AveBedrms",
+      "dtype": "float64",
+      "min": 0.3333333333333333,
+      "max": 25.636363636363637,
+      "mean": 1.0966847487895381,
+      "std": 0.43320142626448643,
+      "description": "Average number of bedrooms per household."
+    },
+    {
+      "name": "Population",
+      "dtype": "float64",
+      "min": 3.0,
+      "max": 35682.0,
+      "mean": 1426.453003875969,
+      "std": 1137.0219480466567,
+      "description": "Block group population."
+    },
+    {
+      "name": "AveOccup",
+      "dtype": "float64",
+      "min": 0.6923076923076923,
+      "max": 1243.3333333333333,
+      "mean": 3.0969611946687525,
+      "std": 11.578393509846865,
+      "description": "Average number of household members."
+    },
+    {
+      "name": "Latitude",
+      "dtype": "float64",
+      "min": 32.55,
+      "max": 41.95,
+      "mean": 35.643149224806194,
+      "std": 2.136600595041562,
+      "description": "Block group latitude (degrees)."
+    },
+    {
+      "name": "Longitude",
+      "dtype": "float64",
+      "min": -124.35,
+      "max": -114.31,
+      "mean": -119.58229045542636,
+      "std": 2.0055928065666584,
+      "description": "Block group longitude (degrees)."
+    }
+  ],
+  "hyperparameters": {
+    "max_iter": 100,
+    "learning_rate": 0.1,
+    "max_leaf_nodes": 31,
+    "early_stopping": false
+  },
+  "seed": 42,
+  "split": {
+    "test_size": 0.2,
+    "method": "train_test_split, shuffled"
+  },
+  "metrics": {
+    "n_train": 16512,
+    "n_test": 4128,
+    "train": {
+      "rmse": 0.39705045494688257,
+      "mae": 0.2728942517751521,
+      "r2": 0.882067898486694
+    },
+    "test": {
+      "rmse": 0.4620021075398639,
+      "mae": 0.3073660587128043,
+      "r2": 0.8371150145370592,
+      "rmse_ci95": [
+        0.441295952045312,
+        0.4811221812330015
+      ],
+      "bootstrap_resamples": 1000
+    },
+    "baselines": {
+      "mean": {
+        "rmse": 1.1448563543099792,
+        "mae": 0.9060685490007149,
+        "r2": -0.00021908714592466794
+      },
+      "ridge": {
+        "rmse": 0.7455567442814778,
+        "mae": 0.5331931195789733,
+        "r2": 0.5758157428913686
+      }
+    }
+  },
+  "dataset": {
+    "name": "California Housing",
+    "loader": "sklearn.datasets.fetch_california_housing",
+    "source_url": "https://ndownloader.figshare.com/files/5976036",
+    "upstream": "StatLib, https://lib.stat.cmu.edu/datasets/houses.zip",
+    "reference": "Pace, R. Kelley and Barry, Ronald (1997). Sparse Spatial Autoregressions. Statistics and Probability Letters, 33, 291-297.",
+    "origin": "1990 U.S. Census, one row per block group",
+    "license": "none stated; see THIRD_PARTY_NOTICES.md",
+    "download_sha256": "aaa5c9a6afe2225cc2aed2723682ae403280c4a3695a2ddda4ffb5d8215ea681",
+    "n_rows": 20640,
+    "n_features": 8,
+    "content_sha256": "f8ce03213e1c375e51c57d02cb41558c30b643325347f1cc0b26ce713ce3a0b7"
+  },
+  "git": {
+    "commit": "2452f1355b899ccff9bac608a0037975e2f5f5b1",
+    "dirty": false
+  },
+  "trained_at": "2026-10-15T22:47:14Z",
+  "library_versions": {
+    "python": "3.11.9",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "joblib": "1.6.0"
+  },
+  "artifacts": {
+    "model": {
+      "file": "model.joblib",
+      "sha256": "271759685c8c97cbea8bd93d4c6177e3b1dc0029c7ef8f726e6173147696150c",
+      "bytes": 167689
+    },
+    "reference": {
+      "file": "reference.json",
+      "sha256": "ba55367a845babc79ea9a77f96c5048454cdf6501519596001e550bfaeb47471",
+      "bytes": 102647
+    }
+  },
+  "mlflow": {
+    "run_id": "834db99ecba64b5686907f22875ecb7d",
+    "experiment": "california-housing-serving"
+  }
+}

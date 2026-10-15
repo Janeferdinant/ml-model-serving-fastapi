@@ -10,14 +10,30 @@
       "at": "2026-10-15T22:39:01Z",
       "previous": null,
       "version": "v1"
+    },
+    {
+      "action": "register",
+      "at": "2026-10-15T22:47:15Z",
+      "version": "v2"
+    },
+    {
+      "action": "promote",
+      "at": "2026-10-15T22:47:18Z",
+      "previous": "v1",
+      "version": "v2"
     }
   ],
-  "production": "v1",
+  "production": "v2",
   "schema_version": 1,
   "versions": {
     "v1": {
       "created_at": "2026-10-15T22:38:57Z",
       "model_sha256": "9f78cf0794456b970a70732b49ecb89dec28e0660bb5c11563226b0de9a3c775",
+      "stage": "archived"
+    },
+    "v2": {
+      "created_at": "2026-10-15T22:47:14Z",
+      "model_sha256": "271759685c8c97cbea8bd93d4c6177e3b1dc0029c7ef8f726e6173147696150c",
       "stage": "production"
     }
   }
