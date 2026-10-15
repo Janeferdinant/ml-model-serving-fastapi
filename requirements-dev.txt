@@ -1,0 +1,13 @@
+# Training, tests, quality gates, load test and docs tooling (pinned).
+-r requirements.txt
+mlflow-skinny==3.17.1
+pytest==9.1.1
+pytest-cov==7.1.0
+httpx==0.28.1
+ruff==0.17.1
+mypy==2.4.0
+pip-audit==2.10.1
+pre-commit==4.7.0
+aiohttp==3.14.5
+matplotlib==3.11.2
+check-jsonschema==0.38.2

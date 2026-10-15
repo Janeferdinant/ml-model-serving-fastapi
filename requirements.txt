@@ -1,0 +1,10 @@
+# Runtime dependencies of the serving image (pinned; resolved on 2026-10-15 for Python 3.11).
+fastapi==0.143.2
+starlette==1.8.0
+pydantic==2.14.1
+uvicorn[standard]==0.54.0
+numpy==2.4.6
+scipy==1.17.1
+scikit-learn==1.9.1
+joblib==1.6.0
+prometheus-client==0.26.0

@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlserving"
+version = "0.1.0"
+description = "Production-style serving, versioning and drift monitoring for a small tabular model (California Housing)."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Jane Rose Ferdinant" }]
+license = { file = "LICENSE" }
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "numpy",
+  "scipy",
+  "scikit-learn",
+  "joblib",
+  "prometheus-client",
+]
+
+[project.optional-dependencies]
+train = ["mlflow-skinny"]
+
+[project.scripts]
+mlserving = "mlserving.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts", "loadtest"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "C4", "RUF", "PT"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "S108", "S311", "S603", "S607"]
+"scripts/*" = ["S310", "S603", "S607", "S311"]
+"loadtest/*" = ["S310", "S603", "S607", "S311"]
+"src/mlserving/train.py" = ["S603", "S607"]
+"src/mlserving/cli.py" = ["S104"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "scripts", "loadtest"]
+plugins = []
+
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "scipy.*", "joblib.*", "mlflow.*", "matplotlib.*", "aiohttp.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --cov=mlserving --cov-report=term-missing --cov-fail-under=90"
+filterwarnings = ["error::DeprecationWarning:mlserving", "ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+branch = true
+source = ["mlserving"]
+
+[tool.coverage.report]
+exclude_also = ["if __name__ == .__main__.:", "pragma: no cover"]
