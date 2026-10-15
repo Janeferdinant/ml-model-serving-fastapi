@@ -24,6 +24,7 @@ Original work in this repository is (c) Jane Rose Ferdinant, licensed CC BY-NC-N
 | scipy | 1.17.1 | BSD-3-Clause |
 | scikit-learn | 1.9.1 | BSD-3-Clause |
 | joblib | 1.6.0 | BSD-3-Clause |
+| threadpoolctl | 3.7.0 | BSD-3-Clause |
 | prometheus-client | 0.26.0 | Apache-2.0 and BSD-2-Clause |
 | mlflow-skinny | 3.17.1 | Apache-2.0 |
 | pytest, pytest-cov | 9.1.1, 7.1.0 | MIT |

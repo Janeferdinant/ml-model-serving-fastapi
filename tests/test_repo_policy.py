@@ -56,8 +56,12 @@ def test_no_secrets_or_local_paths_in_tracked_text() -> None:
     for path in ROOT.rglob("*"):
         if (
             not path.is_file()
-            or any(part in {".git", ".venv", "mlruns", ".mypy_cache", ".ruff_cache"} for part in path.parts)
-            or path.suffix not in {".py", ".md", ".yml", ".yaml", ".json", ".toml", ".html", ".txt", ""}
+            or any(
+                part in {".git", ".venv", "mlruns", ".mypy_cache", ".ruff_cache"}
+                for part in path.parts
+            )
+            or path.suffix
+            not in {".py", ".md", ".yml", ".yaml", ".json", ".toml", ".html", ".txt", ""}
             or path.name == "test_repo_policy.py"
             or "__pycache__" in path.parts
             or ".pytest_cache" in path.parts

@@ -174,7 +174,7 @@ def test_request_id_is_propagated_when_valid(client: TestClient) -> None:
 def test_request_id_is_replaced_when_unsafe(client: TestClient, bad: str) -> None:
     try:
         r = client.get("/health", headers={"X-Request-ID": bad})
-    except Exception:  # noqa: BLE001 - the HTTP client itself may refuse a newline
+    except Exception:
         return
     assert r.headers["x-request-id"] != bad
     assert re.fullmatch(r"[0-9a-f]{32}", r.headers["x-request-id"])

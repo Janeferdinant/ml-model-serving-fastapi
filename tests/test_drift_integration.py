@@ -15,13 +15,23 @@ from mlserving.schema import FEATURES
 from .conftest import synthetic_dataset
 
 
-def serve_rows(model_dir: Path, log: Path, rows: np.ndarray) -> None:
+def serve_rows(model_dir: Path, log: Path, rows: np.ndarray) -> np.ndarray:
+    """Send rows through the API and return what was actually sent (clipped to the schema).
+
+    The range guard rejects values outside the training range, so synthetic traffic is
+    clipped to it first; drift that stays inside the range is what the service can log.
+    """
+    schema = json.loads((model_dir / "v1" / "metadata.json").read_text())["feature_schema"]
+    rows = np.clip(rows, [f["min"] for f in schema], [f["max"] for f in schema])
     settings = Settings(model_dir=model_dir, request_log_path=log, rate_limit_per_minute=0)
     with TestClient(create_app(settings)) as c:
         for start in range(0, len(rows), 100):
             chunk = rows[start : start + 100]
-            payload = {"instances": [dict(zip(FEATURES, map(float, r), strict=True)) for r in chunk]}
+            payload = {
+                "instances": [dict(zip(FEATURES, map(float, r), strict=True)) for r in chunk]
+            }
             assert c.post("/predict/batch", json=payload).status_code == 200
+    return rows
 
 
 def fresh_rows(seed: int, n: int) -> np.ndarray:
@@ -34,12 +44,9 @@ def reference_profile(model_dir: Path) -> drift.ReferenceProfile:
     )
 
 
-def test_logged_features_round_trip_into_the_drift_module(
-    model_dir: Path, tmp_path: Path
-) -> None:
+def test_logged_features_round_trip_into_the_drift_module(model_dir: Path, tmp_path: Path) -> None:
     log = tmp_path / "requests.jsonl"
-    rows = fresh_rows(seed=5, n=300)
-    serve_rows(model_dir, log, rows)
+    rows = serve_rows(model_dir, log, fresh_rows(seed=5, n=300))
     window = drift.load_request_log(log, list(FEATURES))
     assert window.x.shape == (300, len(FEATURES))
     np.testing.assert_allclose(window.x, rows)
@@ -59,7 +66,7 @@ def test_in_distribution_traffic_does_not_trigger_drift(model_dir: Path, tmp_pat
 def test_shifted_traffic_through_the_service_is_detected(model_dir: Path, tmp_path: Path) -> None:
     log = tmp_path / "requests.jsonl"
     rows = fresh_rows(seed=7, n=1500)
-    rows[:, 0] = np.clip(rows[:, 0] * 1.8 + 1.0, 0.5, 15.0)  # MedInc up
+    rows[:, 0] = np.clip(rows[:, 0] * 1.4 + 0.8, 0.5, 9.0)  # MedInc up, inside the range guard
     rows[:, 1] = np.clip(rows[:, 1] - 20.0, 1.0, 52.0)  # HouseAge down
     serve_rows(model_dir, log, rows)
     window = drift.load_request_log(log, list(FEATURES))
@@ -72,7 +79,7 @@ def test_shifted_traffic_through_the_service_is_detected(model_dir: Path, tmp_pa
 def test_cli_writes_reports_and_exit_code(model_dir: Path, tmp_path: Path) -> None:
     log = tmp_path / "requests.jsonl"
     rows = fresh_rows(seed=8, n=800)
-    rows[:, 2] = rows[:, 2] + 3.0  # AveRooms shifted
+    rows[:, 2] = np.clip(rows[:, 2] + 2.0, 2.0, 9.0)  # AveRooms shifted, inside the range guard
     serve_rows(model_dir, log, rows)
     out = tmp_path / "report"
     args = ["drift", "--model-dir", str(model_dir), "--log", str(log), "--out", str(out)]

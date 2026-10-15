@@ -31,7 +31,7 @@ def test_model_info(client: TestClient) -> None:
     assert body["version"] == "v1"
     assert body["stage"] == "production"
     assert body["model_type"] == "HistGradientBoostingRegressor"
-    assert [f["name"] for f in body["feature_schema"]][0] == "MedInc"
+    assert body["feature_schema"][0]["name"] == "MedInc"
     assert len(body["artifacts"]["model"]["sha256"]) == 64
     assert body["metrics"]["test"]["rmse"] > 0
     assert body["trained_at"].endswith("Z")
@@ -137,7 +137,7 @@ def test_metrics_text_format(client: TestClient, valid_payload: dict[str, float]
     assert 'model_prediction_value_count{model_version="v1"} 3.0' in text
     assert 'model_predictions_total{model_version="v1"} 3.0' in text
     assert "model_ready 1.0" in text
-    assert 'model_info{sha256=' in text
+    assert "model_info{sha256=" in text
 
 
 def test_metrics_do_not_explode_label_cardinality(client: TestClient) -> None:

@@ -38,5 +38,6 @@ def test_parallel_requests_are_consistent(
     batch = re.search(
         r'http_requests_total\{method="POST",path="/predict/batch",status="200"\} (\d+)', text
     )
-    assert ok and batch
+    assert ok
+    assert batch
     assert int(ok.group(1)) + int(batch.group(1)) == total + 1

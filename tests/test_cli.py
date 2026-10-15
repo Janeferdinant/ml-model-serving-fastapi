@@ -18,7 +18,16 @@ def test_train_then_promote_then_versions(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     out = tmp_path / "models"
-    train_args = ["train", "--out", str(out), "--no-mlflow", "--max-iter", "20", "--bootstrap", "20"]
+    train_args = [
+        "train",
+        "--out",
+        str(out),
+        "--no-mlflow",
+        "--max-iter",
+        "20",
+        "--bootstrap",
+        "20",
+    ]
     assert main(train_args) == 0
     assert main(train_args) == 0
     assert (out / "v1" / "metadata.json").exists()

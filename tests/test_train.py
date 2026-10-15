@@ -132,7 +132,7 @@ def test_load_california_rejects_unexpected_shape(monkeypatch: pytest.MonkeyPatc
     class Fake:
         data = np.zeros((10, 3))
         target = np.zeros(10)
-        feature_names = ["a", "b", "c"]
+        feature_names = ("a", "b", "c")
 
     monkeypatch.setattr(datasets, "fetch_california_housing", lambda **_: Fake())
     with pytest.raises(ValueError, match="features"):

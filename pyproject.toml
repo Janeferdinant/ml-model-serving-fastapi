@@ -18,6 +18,7 @@ dependencies = [
   "scikit-learn",
   "joblib",
   "prometheus-client",
+  "threadpoolctl",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +45,7 @@ ignore = ["S101"]
 "loadtest/*" = ["S310", "S603", "S607", "S311"]
 "src/mlserving/train.py" = ["S603", "S607"]
 "src/mlserving/cli.py" = ["S104"]
+"src/mlserving/drift.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -52,7 +54,7 @@ files = ["src", "scripts", "loadtest"]
 plugins = []
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "scipy.*", "joblib.*", "mlflow.*", "matplotlib.*", "aiohttp.*"]
+module = ["sklearn.*", "scipy.*", "joblib.*", "mlflow.*", "matplotlib.*", "threadpoolctl.*", "aiohttp.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
