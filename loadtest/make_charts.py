@@ -47,7 +47,13 @@ def main() -> int:
         (rep.get("system_cpu_percent", 0.0) for r in runs for rep in r["repetitions"]), default=0.0
     )
     hw = data["hardware"].split(" (")[0]
-    shared = " Machine CPU-saturated by other jobs." if busiest >= 95 else ""
+    ms = data.get("machine_state")
+    kind = ms["label"] if ms else "run"
+    shared = " Machine CPU-saturated by other jobs." if (busiest >= 95 and not ms) else ""
+    if ms:
+        shared = " " + ms.get("chart_note", "")
+    # The 2026-10-15 charts keep their original names; later runs get a dated suffix.
+    suffix = "" if not ms else f"-{data['date']}"
     out_dir = ROOT / "docs" / "img"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -87,12 +93,12 @@ def main() -> int:
     fig.text(
         0.01,
         0.01,
-        f"Verified (run {data['date']}, {hw}). Median; whiskers min to max.{shared}",
+        f"Verified ({kind} {data['date']}, {hw}). Median; whiskers min to max.{shared}",
         fontsize=7,
         color="#555",
     )
     fig.tight_layout(rect=(0, 0.03, 1, 1))
-    fig.savefig(out_dir / "loadtest-throughput.png", dpi=160)
+    fig.savefig(out_dir / f"loadtest-throughput{suffix}.png", dpi=160)
     plt.close(fig)
 
     # Latency ------------------------------------------------------------------------------
@@ -119,14 +125,19 @@ def main() -> int:
     fig.text(
         0.01,
         0.01,
-        f"Verified (run {data['date']}, {hw}). Closed loop, client on same host.{shared}",
+        f"Verified ({kind} {data['date']}, {hw}). Closed loop, client on same host.{shared}",
         fontsize=7,
         color="#555",
     )
     fig.tight_layout(rect=(0, 0.03, 1, 0.95))
-    fig.savefig(out_dir / "loadtest-latency.png", dpi=160)
+    fig.savefig(out_dir / f"loadtest-latency{suffix}.png", dpi=160)
     plt.close(fig)
-    print("wrote", out_dir / "loadtest-throughput.png", "and", out_dir / "loadtest-latency.png")
+    print(
+        "wrote",
+        out_dir / f"loadtest-throughput{suffix}.png",
+        "and",
+        out_dir / f"loadtest-latency{suffix}.png",
+    )
     return 0
 
 

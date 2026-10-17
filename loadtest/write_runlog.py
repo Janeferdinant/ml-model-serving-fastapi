@@ -22,10 +22,12 @@ def main() -> int:
     args = ap.parse_args()
     d = json.loads(args.json_file.read_text(encoding="utf-8"))
     s = d["settings"]
+    ms = d.get("machine_state")
+    kind = ms["label"] if ms else "run"
     lines = [
         f"# {args.title} ({d['date']})",
         "",
-        f"Verified (run {d['date']}, {d['hardware']}).",
+        f"Verified ({kind} {d['date']}, {d['hardware']}).",
         "",
         "Measured on this machine with the settings below. This is not a claim about production "
         "capacity or about any other hardware.",
@@ -52,36 +54,50 @@ def main() -> int:
         "## Results (median of repetitions; throughput range in brackets)",
         "",
         "| Workers | Request | Connections | Requests/s (min to max) | Rows/s | p50 ms | p95 ms "
-        "| p99 ms | Errors |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| p99 ms | Errors | System CPU % (min to max over repetitions) |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in d["runs"]:
         m = r["summary"]
         rows = m["throughput_rps_median"] * r["rows_per_request"]
         request = "1 row" if r["scenario"] == "single" else f"{r['rows_per_request']} rows"
         kinds = ", ".join(f"{k}: {v}" for k, v in m.get("error_kinds", {}).items())
+        cpus = [rep.get("system_cpu_percent", 0.0) for rep in r["repetitions"]]
         lines.append(
             f"| {r['workers']} | {request} "
             f"| {r['concurrency']} | {m['throughput_rps_median']:,.1f} "
             f"({m['throughput_rps_min']:,.0f} to {m['throughput_rps_max']:,.0f}) | {rows:,.0f} "
             f"| {m['p50_ms_median']:.2f} | {m['p95_ms_median']:.2f} | {m['p99_ms_median']:.2f} "
-            f"| {m['errors_total']}{' (' + kinds + ')' if kinds else ''} |"
+            f"| {m['errors_total']}{' (' + kinds + ')' if kinds else ''} "
+            f"| {min(cpus):.0f} to {max(cpus):.0f} |"
         )
     busiest = max(
         (rep.get("system_cpu_percent", 0.0) for r in d["runs"] for rep in r["repetitions"]),
         default=0.0,
     )
+    if ms:
+        machine_caveat = (
+            f"- **Machine state.** {ms['summary']} Power plan: {ms['power_plan']}. Idle-check log: "
+            f"`{ms['idle_check_file']}`. Peak system CPU during the repetitions was "
+            f"{busiest:.0f}%."
+        )
+    elif busiest >= 95:
+        machine_caveat = (
+            f"- **Shared machine.**"
+            f" System-wide CPU use measured during the repetitions peaked at "
+            f"{busiest:.0f}% (it includes the load test itself); other jobs on the machine kept it "
+            "saturated before every cell as well (`background_cpu_percent_before` in the JSON), "
+            "and waiting for a quiet period was not possible. Absolute numbers are therefore "
+            "lower and noisier than an idle machine would give, and the gain from 1 to 4 workers "
+            "is understated."
+        )
+    else:
+        machine_caveat = "- System CPU stayed below 95% during the repetitions."
     lines += [
         "",
         "## Caveats",
         "",
-        f"- **Shared machine.** System-wide CPU use measured during the repetitions peaked at "
-        f"{busiest:.0f}% (it includes the load test itself); other jobs on the machine kept it "
-        "saturated before every cell as well (`background_cpu_percent_before` in the JSON), and "
-        "waiting for a quiet period was not possible. Absolute numbers are therefore lower and "
-        "noisier than an idle machine would give, and the gain from 1 to 4 workers is understated."
-        if busiest >= 95
-        else "- System CPU stayed below 95% during the repetitions.",
+        machine_caveat,
         "- Client and server run on the same machine and compete for CPU.",
         "- The load is closed loop: each connection waits for its reply before sending the next "
         "request, so latency reflects saturation at that concurrency, not a fixed arrival rate.",
