@@ -794,11 +794,11 @@
     }
   ],
   "machine_state": {
-    "label": "idle-machine rerun",
+    "label": "low-background-load rerun",
     "shared": false,
     "power_plan": "High performance (active, not changed); AC power, no battery",
     "idle_check_file": "2026-10-17-loadtest-idle-check.txt",
-    "summary": "Not idle by the 15% criterion. The 60 s pre-run checks (six checks over 30 minutes, 07:14 to 07:44 local time) gave mean total CPU of 26.9% to 33.9% (maximum 44.9%), almost all of it one process of the owner's, SanDisk Dashboard, using about 3 of the 16 logical CPUs, which was not stopped; no other job or agent was running. The earlier shared-CPU run (2026-10-15) was at about 100% background. System CPU during the repetitions was 93 to 100%, which includes the load test's own four client processes and the server. A network interruption of the session happened between 02:12 and 07:13, before any timed run started; nothing was cut off or discarded.",
+    "summary": "Not idle by the 15% criterion. The 60 s pre-run checks (six checks over 30 minutes, 07:14 to 07:44 local time) gave mean total CPU of 26.9% to 33.9% (maximum 44.9%), almost all of it one unrelated background program, SanDisk Dashboard, using about 3 of the 16 logical CPUs, which was not stopped; no other job or agent was running. The earlier shared-CPU run (2026-10-15) was at about 100% background. System CPU during the repetitions was 93 to 100%, which includes the load test's own four client processes and the server. A network interruption of the session happened between 02:12 and 07:13, before any timed run started; nothing was cut off or discarded.",
     "chart_note": "Background CPU about 27% before the run (owner's process); see run log."
   },
   "note": "5 repetitions per cell (the 2026-10-15 run used 3); all other settings identical."

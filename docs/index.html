@@ -311,10 +311,10 @@ footer{padding:22px 0 40px;color:var(--muted);font-size:.88rem}
         el("img", { "class": "chart", src: "img/loadtest-throughput" + suffix + ".png", alt: "Bar chart of requests per second for 1 and 4 uvicorn workers, for single-row and batch requests at two concurrency levels (" + what + ").", width: "1280", height: "672" }),
         el("img", { "class": "chart", src: "img/loadtest-latency" + suffix + ".png", alt: "Bar charts of p50, p95 and p99 latency in milliseconds by worker count and concurrency, for single-row and batch requests (" + what + ").", width: "1440", height: "672" }));
     }
-    root.appendChild(el("h3", { text: "Headline run: idle-machine rerun " + L.date }));
-    root.appendChild(charts("-" + L.date, "idle-machine rerun"));
+    root.appendChild(el("h3", { text: "Headline run: low-background-load rerun " + L.date }));
+    root.appendChild(charts("-" + L.date, "low-background-load rerun"));
     root.appendChild(el("h3", { text: "Results (median of " + L.settings.repetitions + " repetitions of " + L.settings.duration_seconds_per_rep + " s each)" }));
-    root.appendChild(runTable(L, "Load test results, idle-machine rerun"));
+    root.appendChild(runTable(L, "Load test results, low-background-load rerun"));
     var S = L.settings;
     root.appendChild(el("h3", { text: "Settings and caveats" }));
     root.appendChild(el("div", { "class": "card" }, el("dl", { "class": "kv" },
