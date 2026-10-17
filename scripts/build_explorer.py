@@ -55,12 +55,21 @@ def model_card() -> dict[str, Any]:
     return card
 
 
+def earlier_loadtest() -> dict[str, Any] | None:
+    """The run before the newest one (kept visible, labelled as the earlier shared-CPU run)."""
+    files = sorted((DOCS / "runs").glob("*-loadtest.json"))
+    if len(files) < 2:
+        return None
+    return json.loads(files[-2].read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+
+
 def main() -> int:
     app = create_app(Settings(model_dir=ROOT / "models", strict_startup=False))
     data = {
         "openapi": app.openapi(),
         "model": model_card(),
         "loadtest": json.loads(newest("*-loadtest.json").read_text(encoding="utf-8")),
+        "loadtest_earlier": earlier_loadtest(),
         "latency": json.loads(newest("*-predict-latency.json").read_text(encoding="utf-8")),
         "drift": json.loads((DOCS / "data" / "drift_demo.json").read_text(encoding="utf-8")),
     }

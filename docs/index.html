@@ -293,21 +293,28 @@ footer{padding:22px 0 40px;color:var(--muted);font-size:.88rem}
 
   /* ------------------------------------------------------------------ load test */
   (function () {
-    var L = D.loadtest, root = document.getElementById("load-root");
-    document.getElementById("load-label").textContent = "Verified (run " + L.date + ", " + L.hardware + "). Measured on this machine with the settings below; not a statement about production capacity.";
-    var imgs = el("div", { "class": "grid2" },
-      el("img", { "class": "chart", src: "img/loadtest-throughput.png", alt: "Bar chart of requests per second for 1 and 4 uvicorn workers, for single-row and batch requests at two concurrency levels.", width: "1280", height: "672" }),
-      el("img", { "class": "chart", src: "img/loadtest-latency.png", alt: "Bar charts of p50, p95 and p99 latency in milliseconds by worker count and concurrency, for single-row and batch requests.", width: "1440", height: "672" }));
-    root.appendChild(imgs);
+    var L = D.loadtest, E = D.loadtest_earlier, root = document.getElementById("load-root");
+    var ms = L.machine_state || {};
+    document.getElementById("load-label").textContent = "Verified (" + (ms.label || "run") + " " + L.date + ", " + L.hardware + "). Measured on this machine with the settings below; not a statement about production capacity.";
+    function runTable(R, title) {
+      var rows = R.runs.map(function (r) {
+        var s = r.summary;
+        return row([r.workers, r.scenario === "single" ? "1 row" : r.rows_per_request + " rows", r.concurrency,
+          num(s.throughput_rps_median, 1) + " (" + num(s.throughput_rps_min, 0) + " to " + num(s.throughput_rps_max, 0) + ")",
+          num(s.throughput_rps_median * r.rows_per_request, 0),
+          num(s.p50_ms_median, 2), num(s.p95_ms_median, 2), num(s.p99_ms_median, 2), s.errors_total]);
+      });
+      return table(title, ["Workers", "Request", "Connections", "Requests/s (min to max)", "Rows/s", "p50 ms", "p95 ms", "p99 ms", "Errors"], rows);
+    }
+    function charts(suffix, what) {
+      return el("div", { "class": "grid2" },
+        el("img", { "class": "chart", src: "img/loadtest-throughput" + suffix + ".png", alt: "Bar chart of requests per second for 1 and 4 uvicorn workers, for single-row and batch requests at two concurrency levels (" + what + ").", width: "1280", height: "672" }),
+        el("img", { "class": "chart", src: "img/loadtest-latency" + suffix + ".png", alt: "Bar charts of p50, p95 and p99 latency in milliseconds by worker count and concurrency, for single-row and batch requests (" + what + ").", width: "1440", height: "672" }));
+    }
+    root.appendChild(el("h3", { text: "Headline run: idle-machine rerun " + L.date }));
+    root.appendChild(charts("-" + L.date, "idle-machine rerun"));
     root.appendChild(el("h3", { text: "Results (median of " + L.settings.repetitions + " repetitions of " + L.settings.duration_seconds_per_rep + " s each)" }));
-    var rows = L.runs.map(function (r) {
-      var s = r.summary;
-      return row([r.workers, r.scenario === "single" ? "1 row" : r.rows_per_request + " rows", r.concurrency,
-        num(s.throughput_rps_median, 1) + " (" + num(s.throughput_rps_min, 0) + " to " + num(s.throughput_rps_max, 0) + ")",
-        num(s.throughput_rps_median * r.rows_per_request, 0),
-        num(s.p50_ms_median, 2), num(s.p95_ms_median, 2), num(s.p99_ms_median, 2), s.errors_total]);
-    });
-    root.appendChild(table("Load test results", ["Workers", "Request", "Connections", "Requests/s (min to max)", "Rows/s", "p50 ms", "p95 ms", "p99 ms", "Errors"], rows));
+    root.appendChild(runTable(L, "Load test results, idle-machine rerun"));
     var S = L.settings;
     root.appendChild(el("h3", { text: "Settings and caveats" }));
     root.appendChild(el("div", { "class": "card" }, el("dl", { "class": "kv" },
@@ -317,7 +324,14 @@ footer{padding:22px 0 40px;color:var(--muted);font-size:.88rem}
       el("dt", { text: "App config" }), el("dd", { text: S.app_config }),
       el("dt", { text: "Client" }), el("dd", { text: S.client }),
       el("dt", { text: "Payloads" }), el("dd", { text: S.payloads }),
-      el("dt", { text: "Caveats" }), el("dd", { text: (L.runs.some(function (r) { return r.repetitions.some(function (p) { return p.system_cpu_percent >= 95; }); }) ? "Shared machine: other jobs kept system CPU at about 100% throughout, so absolute numbers are lower and noisier than on an idle machine and the gain from 1 to 4 workers is understated. " : "") + "Client and server share one machine and compete for CPU. The loop is closed (each connection waits for its reply), so latency reflects saturation at that concurrency, not an arrival-rate model. Results will differ on other hardware." }))));
+      el("dt", { text: "Machine state" }), el("dd", { text: ms.summary || "" }),
+      el("dt", { text: "Caveats" }), el("dd", { text: "Client and server share one machine and compete for CPU. The loop is closed (each connection waits for its reply), so latency reflects saturation at that concurrency, not an arrival-rate model. Some 4-worker repetitions hit 30 s client timeouts (see Errors) and their throughput collapsed; the medians are not affected. These numbers are not capacity claims; results will differ on other hardware." }))));
+    if (E) {
+      root.appendChild(el("h3", { text: "Earlier run (shared CPU), " + E.date }));
+      root.appendChild(el("p", { "class": "sub", text: "Kept for the record. Measured while other jobs held system CPU at about 100%, so absolute numbers are lower and noisier and the gain from 1 to 4 workers is understated. Superseded as the headline by the rerun above. Verified (run " + E.date + ", " + E.hardware + ")." }));
+      root.appendChild(charts("", "earlier run, shared CPU"));
+      root.appendChild(runTable(E, "Load test results, earlier run (shared CPU)"));
+    }
     var P = D.latency;
     root.appendChild(el("h3", { text: "Where the time goes: predict() micro-benchmark (no HTTP)" }));
     var prow = P.rows.map(function (r) { return row([r.max_iter, r.threads === "default" ? "scikit-learn default" : r.threads, r.rows, num(r.median_ms, 2), num(r.p95_ms, 2)]); });
