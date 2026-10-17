@@ -10,7 +10,7 @@
 | Model quality | Test RMSE 0.462 (95% bootstrap CI 0.441 to 0.481) in units of USD 100,000, against 1.145 for the mean predictor and 0.746 for ridge. | Verified (run 2026-10-15, seed 42, one split) |
 | Tests | 171 pytest tests pass, 96.9% line and branch coverage (threshold 90%); ruff and mypy (strict) clean. | Verified (run 2026-10-15, Windows 11, Python 3.11.9) and on GitHub Actions (ubuntu-24.04, Python 3.11, same 171 tests and coverage), [run 38823370997](https://github.com/Janeferdinant/ml-model-serving-fastapi/actions/runs/38823370997) |
 | Container | Multi-stage, non-root, digest-pinned base, health check; image built, hadolint-linted and smoke-tested while running. | Verified on GitHub Actions only, [run 38823370997](https://github.com/Janeferdinant/ml-model-serving-fastapi/actions/runs/38823370997): hadolint clean, build, container smoke test (11 checks), uid 10001, health `healthy`. Image size 407,437,905 bytes, not small because scikit-learn and SciPy dominate. |
-| Load | 1 uvicorn worker: about 170 requests/s for single rows (16 connections: p50 94 ms, p95 109 ms, p99 131 ms). 4 workers: 240 to 392 requests/s for single rows and about 424 requests/s for 32-row batches (13,552 rows/s). Measured on a machine saturated by other jobs, so low and noisy; not a capacity claim. | Verified (run 2026-10-15, AMD Ryzen 7 5800X (8 cores, 16 threads), 32 GB RAM, Windows 11 Pro) |
+| Load | 1 uvicorn worker: about 241 requests/s for single rows (16 connections: p50 67 ms, p95 76 ms, p99 85 ms). 4 workers: 566 to 593 requests/s for single rows and 497 to 524 requests/s for 32-row batches (about 15,900 to 16,800 rows/s), 2.2x to 2.5x the single worker; 22 client timeouts (30 s) in 4 of 20 four-worker repetitions. Not a capacity claim: client and server share the host. Earlier run on a shared, saturated CPU (2026-10-15): about 170 requests/s with 1 worker, 240 to 392 with 4. | Verified (idle-machine rerun 2026-10-17, AMD Ryzen 7 5800X (8 cores, 16 threads), 32 GB RAM, Windows 11 Pro). Not fully idle by the 15% criterion: background CPU about 27% (one process of the owner's, about 3 logical CPUs, not stopped); see below |
 | Drift monitor | On held-out data with simulated shifts: 0 of 200 unchanged windows flagged; a MedInc shift of 0.2 training standard deviations flagged in 95.5% of windows, 0.5 or more in 100% (as drift). | Verified (simulated, run 2026-10-15) |
 
 ## Overview
@@ -68,7 +68,27 @@ v2 replaced v1 because per-request latency was dominated by `predict` (see the m
 
 One `predict` call on 1 to 32 rows costs about the same, because per-iteration overhead dominates. scikit-learn's default OpenMP threading made such small calls roughly 3 to 4 times slower than one thread (for example 100 iterations, 1 row: 5.43 ms median with default threads, 1.41 ms with one thread), so the service pins prediction to one thread (`MLS_PREDICT_THREADS=1`) and scales with worker processes. A quick interleaved comparison also kept the endpoints as thread-pool `def` functions rather than `async def` with an inline `predict` (`docs/runs/2026-10-15-sync-vs-async.md`).
 
-### Load test (Verified, run 2026-10-15, AMD Ryzen 7 5800X (8 cores, 16 threads), 32 GB RAM, Windows 11 Pro; `docs/runs/2026-10-15-loadtest.md`)
+### Load test (Verified, idle-machine rerun 2026-10-17, AMD Ryzen 7 5800X (8 cores, 16 threads), 32 GB RAM, Windows 11 Pro; `docs/runs/2026-10-17-loadtest.md`)
+
+Same settings as the earlier run (model v2, 15 s per repetition after a 4 s warm-up, same payloads and seed, 16 and 64 connections, single row and 32-row batch, 4 client processes on the same host), but 5 repetitions per cell instead of 3, on a machine with no other jobs of mine running.
+
+| Workers | Request | Connections | Requests/s, median (min to max) | p50 ms | p95 ms | p99 ms | Errors | System CPU during run |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 1 row | 16 | 240.6 (235 to 244) | 66.5 | 76.0 | 84.7 | 0 | 100% |
+| 1 | 1 row | 64 | 234.2 (231 to 235) | 271.4 | 299.7 | 332.3 | 0 | 100% |
+| 1 | 32 rows | 16 | 228.0 (225 to 229) | 69.4 | 82.5 | 113.2 | 0 | 100% |
+| 1 | 32 rows | 64 | 220.6 (220 to 223) | 285.8 | 333.3 | 353.0 | 0 | 100% |
+| 4 | 1 row | 16 | 565.9 (216 to 579) | 28.1 | 32.9 | 35.2 | 5 timeouts | 93 to 100% |
+| 4 | 1 row | 64 | 592.6 (532 to 621) | 104.6 | 120.5 | 131.7 | 0 | 100% |
+| 4 | 32 rows | 16 | 497.3 (214 to 524) | 28.0 | 39.5 | 45.7 | 6 timeouts | 94 to 100% |
+| 4 | 32 rows | 64 | 523.8 (259 to 544) | 116.8 | 136.2 | 153.6 | 11 timeouts | 94 to 100% |
+
+![Throughput, idle-machine rerun](docs/img/loadtest-throughput-2026-10-17.png)
+![Latency percentiles, idle-machine rerun](docs/img/loadtest-latency-2026-10-17.png)
+
+Going from 1 to 4 workers gave 2.2x to 2.5x the throughput (about 15,900 to 16,800 rows/s with 32-row batches). Latency and throughput are much tighter than in the earlier run (1-worker ranges are within 4%). Not all of the machine was free: the 60-second pre-run checks (six over 30 minutes, `docs/runs/2026-10-17-loadtest-idle-check.txt`) gave a mean total CPU of 26.9% to 33.9%, above the 15% target, almost all from one process of the owner's (SanDisk Dashboard, about 3 of 16 logical CPUs) that was not stopped; no other job or agent was running, the power plan was High performance (already active, not changed) and the machine was on AC power. System CPU during the repetitions was 93 to 100%, which includes the load test's own four client processes and the server, so the 4-worker numbers are limited by the client sharing the CPU. Four of the 20 four-worker repetitions (two in one cell, one in each of two others) had 30 s client timeouts (22 requests in total); in those repetitions throughput collapsed to about 215 to 260 requests/s, which widens the ranges but not the medians. The cause was not diagnosed. No repetition was discarded. These numbers say nothing about production capacity.
+
+**Earlier run (shared CPU), 2026-10-15** (kept for the record; `docs/runs/2026-10-15-loadtest.md`; Verified (run 2026-10-15, same hardware); other jobs held system CPU at about 100% the whole time, so these are lower and noisier, 3 repetitions):
 
 | Workers | Request | Connections | Requests/s, median (min to max) | p50 ms | p95 ms | p99 ms | Errors |
 |---|---|---|---|---|---|---|---|
@@ -81,10 +101,10 @@ One `predict` call on 1 to 32 rows costs about the same, because per-iteration o
 | 4 | 32 rows | 16 | 423.5 (400 to 426) | 37.3 | 44.2 | 48.3 | 0 |
 | 4 | 32 rows | 64 | 418.5 (403 to 422) | 149.2 | 176.5 | 200.0 | 0 |
 
-![Throughput](docs/img/loadtest-throughput.png)
-![Latency percentiles](docs/img/loadtest-latency.png)
+![Throughput, earlier run (shared CPU)](docs/img/loadtest-throughput.png)
+![Latency percentiles, earlier run (shared CPU)](docs/img/loadtest-latency.png)
 
-The development machine was running other jobs at about 100% CPU the whole time (system CPU 98 to 100% before every cell, `docs/runs/2026-10-15-loadtest.json`), and no quiet period came. Absolute numbers are therefore low and noisy, and going from 1 to 4 workers gave about 1.4x to 2.6x rather than 4x; with an idle machine the gain would be larger, but that was not measured. The client ran on the same host. Model v2 was in production. Two client timeouts (30 s limit, both in the 4-worker, single-row, 16-connection cell) occurred across the 24 repetitions of 15 s; every other request returned 200. The 4-worker, single-row, 16-connection cell has a wide range (84 to 248 requests/s across its three repetitions), a sign of interference. These numbers say nothing about production capacity.
+The client ran on the same host in both runs. A network interruption of the working session happened before the 2026-10-17 run started; nothing was cut off.
 
 ### Drift detection (Verified, simulated, run 2026-10-15; `docs/data/drift_demo.json`)
 
@@ -111,9 +131,9 @@ Over 200 random 1,000-row windows per shift size, MedInc shifted by 0, 0.1, 0.2,
 | `docker-compose.yml` | Verified on GitHub Actions: `docker compose up --build --wait` then the smoke test (no API key), [run 38823370997](https://github.com/Janeferdinant/ml-model-serving-fastapi/actions/runs/38823370997) | `ci.yml`, job `compose` |
 | Local Docker | Not verified locally: the Docker engine was not running on the development machine, so nothing in this repository was built or run with local Docker | |
 | `release.yml` (build and tag on version tags, never pushes) | Not executed: no tag was pushed. Validated against the GitHub workflow schema, and a test asserts it has no push, login or write permission | `tests/test_repo_policy.py` |
-| Explorer page `docs/index.html` | Verified with Playwright (Chromium, served by a throwaway local static server) at 390 px and 1280 px on 2026-10-15: no console errors or warnings, no horizontal page overflow, charts and tables render | `docs/img/explorer-api-1280.png` |
+| Explorer page `docs/index.html` | Verified with Playwright (Chromium, served by a throwaway local static server) at 390 px and 1280 px on 2026-10-15: no console errors or warnings, no horizontal page overflow, charts and tables render; re-checked on 2026-10-17 after the load-test update (load section at 390 px and 1280 px: no console errors or warnings, no horizontal overflow) | `docs/img/explorer-api-1280.png`, `docs/img/explorer-load-1280-2026-10-17.png`, `docs/img/explorer-load-390-2026-10-17.png` |
 | Model metrics | Verified, one seed and one split | `docs/runs/2026-10-15-training.md` |
-| Load-test numbers | Verified for the stated machine, shared with other jobs, Windows event loop, client on the same host | `docs/runs/` |
+| Load-test numbers | Headline: idle-machine rerun 2026-10-17 (background CPU about 27%, one process of the owner's; the load test itself drives system CPU to 93 to 100%), Windows event loop, client on the same host, 4-worker timeouts noted. Earlier shared-CPU run (2026-10-15) kept for comparison | `docs/runs/` |
 | Drift detection | Verified on simulated shifts of held-out data only | `docs/data/drift_demo.json` |
 | Prometheus output | The text format is asserted in tests; it was not scraped by a Prometheus server | |
 | Multi-worker metrics | Not supported: each worker has its own registry, so a scrape sees one worker | |
@@ -235,7 +255,7 @@ Validation: pydantic v2 strict mode (numbers only, no strings, no NaN or infinit
 src/mlserving/   config, schema, registry, train, predictor, app, middleware, metrics, reqlog, drift, cli
 tests/           171 tests (pytest, httpx TestClient); a synthetic dataset keeps them offline
 models/          registry.json, v1/, v2/ (model.joblib under 0.5 MB each, metadata.json, reference.json)
-loadtest/        run_loadtest.py (aiohttp client), bench_predict.py, make_charts.py, write_runlog.py
+loadtest/        run_loadtest.py (aiohttp client), bench_predict.py, make_charts.py, write_runlog.py (new runs get dated files; earlier ones are kept)
 scripts/         smoke_test.py, docker_smoke.sh, make_drift_demo.py, build_explorer.py
 docs/            index.html explorer, data.js, img/, runs/ (dated run logs and raw JSON)
 .github/workflows/ci.yml, release.yml
@@ -250,7 +270,7 @@ Dockerfile, docker-compose.yml, Makefile, pyproject.toml, requirements*.txt
 - The rate limiter is in process, per worker and per client IP, so with N workers the effective limit is about N times the setting, and clients behind one proxy share a bucket. `X-Forwarded-For` is not read. Authentication is a single shared API key; there is no TLS, user model or key rotation.
 - `/metrics` reports one worker's counters when several run. The request log is an unbounded append-only file without rotation.
 - The drift reference is a quantile sketch, so KS p-values treat it as 1,001 observations; PSI bins come from the same sketch. Thresholds (PSI 0.1 and 0.25, Bonferroni-corrected alpha 0.01) are conventional defaults, not tuned.
-- The load test runs the client on the same machine, closed loop, on Windows without uvloop, on a machine shared with other jobs. It is not a capacity claim. About errors under heavy concurrency, see the load-test notes.
+- The load test runs the client on the same machine, closed loop, on Windows without uvloop, and the rerun still had about 27% background CPU from one other process (the earlier run was on a machine saturated by other jobs). It is not a capacity claim. The 4-worker cells show 30 s client timeouts whose cause was not diagnosed; see the load-test notes.
 - Docker was not available locally; container behaviour was verified only on GitHub Actions runners. `release.yml` has never run.
 - Model changes take effect on restart; there is no hot reload, canary, shadow traffic or automatic rollback.
 
