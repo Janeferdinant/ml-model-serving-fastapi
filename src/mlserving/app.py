@@ -5,6 +5,7 @@ Run with ``uvicorn mlserving.app:create_app --factory`` (configuration from ``ML
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 from collections.abc import AsyncIterator
@@ -13,12 +14,18 @@ from typing import IO, Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from threadpoolctl import threadpool_limits
 
 from mlserving import __version__
 from mlserving.config import Settings
+from mlserving.llm import (
+    LLMClient,
+    LLMGenerateRequest,
+    MockLLMClient,
+    OllamaStreamingClient,
+)
 from mlserving.logging_config import configure_logging
 from mlserving.metrics import CONTENT_TYPE, Metrics
 from mlserving.middleware import (
@@ -127,6 +134,12 @@ def create_app(settings: Settings | None = None, *, log_stream: IO[str] | None =
     app.state.metrics = metrics
     app.state.bundle = None
     app.state.load_error = None
+    llm_client: LLMClient = (
+        OllamaStreamingClient(base_url=settings.llm_base_url)
+        if settings.llm_enabled
+        else MockLLMClient()
+    )
+    app.state.llm_client = llm_client
 
     # ------------------------------------------------------------------ dependencies
 
@@ -318,6 +331,37 @@ def create_app(settings: Settings | None = None, *, log_stream: IO[str] | None =
     )
     def metrics_endpoint() -> Response:
         return Response(content=metrics.render(), media_type=CONTENT_TYPE)
+
+    @app.post(
+        "/v1/generate",
+        dependencies=auth,
+        responses=COMMON_ERRORS,
+        tags=["llm"],
+        summary="Generate streaming LLM text",
+    )
+    async def generate_llm(
+        request: Request,
+        body: LLMGenerateRequest,
+    ) -> Response:
+        client: LLMClient = getattr(request.app.state, "llm_client", None) or MockLLMClient()
+        rid = _rid(request)
+
+        if not body.stream:
+            resp = await client.generate(body)
+            resp.request_id = rid
+            return JSONResponse(resp.model_dump())
+
+        async def event_generator() -> AsyncIterator[str]:
+            try:
+                async for chunk in client.stream_generate(body):
+                    payload = chunk.model_dump(exclude_none=True)
+                    yield f"data: {json.dumps(payload)}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as exc:
+                err_payload = {"error": str(exc), "request_id": rid}
+                yield f"data: {json.dumps(err_payload)}\n\n"
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     # ------------------------------------------------------------------ middleware
     # Added innermost first; the request-context middleware ends up outermost so that
