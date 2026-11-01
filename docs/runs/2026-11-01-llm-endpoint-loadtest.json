@@ -1,0 +1,46 @@
+{
+  "date": "2026-11-01",
+  "started_utc": "2026-11-01T19:18:07Z",
+  "hardware": "AMD Ryzen 7 7730U, 16 logical CPUs",
+  "logical_cpus": 16,
+  "platform": "Windows-10-10.0.26200-SP0",
+  "python": "3.11.14",
+  "runs": [
+    {
+      "concurrency": 1,
+      "requests": 32,
+      "errors": 0,
+      "ttft_p50_ms": 281.69,
+      "ttft_p95_ms": 286.56,
+      "duration_p50_ms": 281.86,
+      "duration_p95_ms": 286.72,
+      "total_tokens": 736,
+      "aggregate_tokens_per_sec": 80.18,
+      "mean_tokens_per_sec": 80.63
+    },
+    {
+      "concurrency": 4,
+      "requests": 32,
+      "errors": 0,
+      "ttft_p50_ms": 293.84,
+      "ttft_p95_ms": 298.38,
+      "duration_p50_ms": 294.02,
+      "duration_p95_ms": 298.56,
+      "total_tokens": 736,
+      "aggregate_tokens_per_sec": 309.35,
+      "mean_tokens_per_sec": 78.3
+    },
+    {
+      "concurrency": 16,
+      "requests": 32,
+      "errors": 0,
+      "ttft_p50_ms": 313.33,
+      "ttft_p95_ms": 325.21,
+      "duration_p50_ms": 313.48,
+      "duration_p95_ms": 325.41,
+      "total_tokens": 736,
+      "aggregate_tokens_per_sec": 1114.45,
+      "mean_tokens_per_sec": 73.68
+    }
+  ]
+}
