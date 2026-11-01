@@ -19,6 +19,7 @@ dependencies = [
   "joblib",
   "prometheus-client",
   "threadpoolctl",
+  "httpx",
 ]
 
 [project.optional-dependencies]
