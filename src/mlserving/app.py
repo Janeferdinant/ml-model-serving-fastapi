@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import IO, Annotated, Any
@@ -345,19 +346,44 @@ def create_app(settings: Settings | None = None, *, log_stream: IO[str] | None =
     ) -> Response:
         client: LLMClient = getattr(request.app.state, "llm_client", None) or MockLLMClient()
         rid = _rid(request)
+        t0 = time.perf_counter()
 
         if not body.stream:
-            resp = await client.generate(body)
-            resp.request_id = rid
-            return JSONResponse(resp.model_dump())
+            try:
+                resp = await client.generate(body)
+                duration = time.perf_counter() - t0
+                resp.request_id = rid
+                metrics.observe_llm_request("success", duration)
+                metrics.observe_llm_tokens(resp.tokens_in, resp.tokens_out)
+                metrics.observe_llm_ttft(resp.ttft_ms / 1000.0)
+                return JSONResponse(resp.model_dump())
+            except Exception:
+                duration = time.perf_counter() - t0
+                metrics.observe_llm_request("error", duration)
+                raise
 
         async def event_generator() -> AsyncIterator[str]:
+            first_token_seen = False
+            tokens_in = max(1, len(body.prompt.split()))
+            tokens_out = 0
             try:
                 async for chunk in client.stream_generate(body):
+                    if not first_token_seen and chunk.ttft_ms is not None:
+                        first_token_seen = True
+                        metrics.observe_llm_ttft(chunk.ttft_ms / 1000.0)
+                    if chunk.tokens_in is not None:
+                        tokens_in = chunk.tokens_in
+                    if chunk.text:
+                        tokens_out += 1
                     payload = chunk.model_dump(exclude_none=True)
                     yield f"data: {json.dumps(payload)}\n\n"
+                duration = time.perf_counter() - t0
+                metrics.observe_llm_tokens(tokens_in, tokens_out)
+                metrics.observe_llm_request("success", duration)
                 yield "data: [DONE]\n\n"
             except Exception as exc:
+                duration = time.perf_counter() - t0
+                metrics.observe_llm_request("error", duration)
                 err_payload = {"error": str(exc), "request_id": rid}
                 yield f"data: {json.dumps(err_payload)}\n\n"
 
@@ -368,7 +394,9 @@ def create_app(settings: Settings | None = None, *, log_stream: IO[str] | None =
     # 413 and 429 responses are logged and counted too.
     known_paths = {route.path for route in app.routes if hasattr(route, "path")}
     app.add_middleware(
-        RateLimitMiddleware, limiter=TokenBucketLimiter(settings.rate_limit_per_minute)
+        RateLimitMiddleware,
+        limiter=TokenBucketLimiter(settings.rate_limit_per_minute),
+        metrics=metrics,
     )
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
     app.add_middleware(RequestContextMiddleware, metrics=metrics, known_paths=known_paths)
