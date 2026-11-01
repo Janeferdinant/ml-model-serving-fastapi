@@ -179,9 +179,15 @@ class BodySizeLimitMiddleware:
 
 
 class RateLimitMiddleware:
-    def __init__(self, app: ASGIApp, limiter: TokenBucketLimiter) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        limiter: TokenBucketLimiter,
+        metrics: Metrics | None = None,
+    ) -> None:
         self.app = app
         self.limiter = limiter
+        self.metrics = metrics
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if (
@@ -196,6 +202,8 @@ class RateLimitMiddleware:
         if allowed:
             await self.app(scope, receive, send)
             return
+        if self.metrics is not None and scope.get("path") == "/v1/generate":
+            self.metrics.llm_requests.labels("rate_limited").inc()
         body: dict[str, Any] = {
             "detail": "Rate limit exceeded; retry later",
             "request_id": request_id_of(scope),

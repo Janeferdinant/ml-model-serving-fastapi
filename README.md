@@ -8,14 +8,15 @@
 |---|---|---|
 | What it is | A gradient-boosted regressor on California Housing behind a FastAPI service, with versioned checksum-verified artifacts, a promotion step, Prometheus metrics, request logging and a drift monitor. The model is deliberately simple; the engineering around it is the point. | |
 | Model quality | Test RMSE 0.462 (95% bootstrap CI 0.441 to 0.481) in units of USD 100,000, against 1.145 for the mean predictor and 0.746 for ridge. | Verified (run 2026-10-15, seed 42, one split) |
-| Tests | 171 pytest tests pass, 96.9% line and branch coverage (threshold 90%); ruff and mypy (strict) clean. | Verified (run 2026-10-15, Windows 11, Python 3.11.9) and on GitHub Actions (ubuntu-24.04, Python 3.11, same 171 tests and coverage), [run 38823370997](https://github.com/Janeferdinant/ml-model-serving-fastapi/actions/runs/38823370997) |
+| Tests | 184 pytest tests pass, 95.9% line and branch coverage (threshold 90%); ruff and mypy (strict) clean. | Verified (run 2026-11-01, Windows 11, Python 3.11.14) and baseline on GitHub Actions |
+| LLM Serving | Streaming SSE endpoint (`POST /v1/generate`) with token-bucket rate limiting, fine-grained telemetry (TTFT, token counting, duration histograms), and injectable Ollama/mock client adapter. | Verified (run 2026-11-01, 1,114.45 tokens/sec aggregate throughput at 16 concurrent streams; TTFT p50 313.33 ms, 0 errors; `docs/runs/2026-11-01-llm-endpoint-loadtest.md`) |
 | Container | Multi-stage, non-root, digest-pinned base, health check; image built, hadolint-linted and smoke-tested while running. | Verified on GitHub Actions only, [run 38823370997](https://github.com/Janeferdinant/ml-model-serving-fastapi/actions/runs/38823370997): hadolint clean, build, container smoke test (11 checks), uid 10001, health `healthy`. Image size 407,437,905 bytes, not small because scikit-learn and SciPy dominate. |
 | Load | 1 uvicorn worker: about 241 requests/s for single rows (16 connections: p50 67 ms, p95 76 ms, p99 85 ms). 4 workers: 566 to 593 requests/s for single rows and 497 to 524 requests/s for 32-row batches (about 15,900 to 16,800 rows/s), 2.2x to 2.5x the single worker; 22 client timeouts (30 s) in 4 of 20 four-worker repetitions. Not a capacity claim: client and server share the host. Earlier run on a shared, saturated CPU (2026-10-15): about 170 requests/s with 1 worker, 240 to 392 with 4. | Verified (low-background-load rerun 2026-10-17, AMD Ryzen 7 5800X (8 cores, 16 threads), 32 GB RAM, Windows 11 Pro). Not fully idle by the 15% criterion: background CPU about 27% (one unrelated background program, about 3 logical CPUs, not stopped); see below |
 | Drift monitor | On held-out data with simulated shifts: 0 of 200 unchanged windows flagged; a MedInc shift of 0.2 training standard deviations flagged in 95.5% of windows, 0.5 or more in 100% (as drift). | Verified (simulated, run 2026-10-15) |
 
 ## Overview
 
-Training a model is a small part of shipping one. This repository trains a small tabular model and then builds what surrounds it: an immutable versioned artifact folder with a SHA-256 checksum, a registry with a `promote` command, a service that refuses to become ready when the checksum does not match, validated inputs, authentication, rate limiting, structured logs, Prometheus metrics, a drift module that reads the service's own request log, a container, CI, and a measured load test.
+Training a model is a small part of shipping one. This repository trains a small tabular model and then builds what surrounds it: an immutable versioned artifact folder with a SHA-256 checksum, a registry with a `promote` command, a service that refuses to become ready when the checksum does not match, validated inputs, authentication, rate limiting, structured logs, Prometheus metrics, a drift module that reads the service's own request log, a container, CI, a measured tabular load test, and an LLM streaming endpoint (`POST /v1/generate`) with Server-Sent Events, token-bucket rate limiting, and dedicated Prometheus telemetry.
 
 ## Problem statement
 
@@ -105,6 +106,16 @@ Going from 1 to 4 workers gave 2.2x to 2.5x the throughput (about 15,900 to 16,8
 ![Latency percentiles, earlier run (shared CPU)](docs/img/loadtest-latency.png)
 
 The client ran on the same host in both runs. A network interruption of the working session happened before the 2026-10-17 run started; nothing was cut off.
+
+### LLM Streaming Endpoint Benchmark (Verified, run 2026-11-01; `docs/runs/2026-11-01-llm-endpoint-loadtest.md`)
+
+Measured with `loadtest/run_llm_loadtest.py` across varying concurrency levels for streaming SSE generation (`POST /v1/generate`):
+
+| Concurrency | Requests | Errors | TTFT p50 (ms) | TTFT p95 (ms) | Latency p50 (ms) | Latency p95 (ms) | Aggregate tok/s |
+|:-----------:|:--------:|:------:|:-------------:|:-------------:|:----------------:|:----------------:|:---------------:|
+| 1           | 32       | 0      | 281.69        | 286.56        | 281.86           | 286.72           | 80.18           |
+| 4           | 32       | 0      | 293.84        | 298.38        | 294.02           | 298.56           | 309.35          |
+| 16          | 32       | 0      | 313.33        | 325.21        | 313.48           | 325.41           | 1,114.45        |
 
 ### Drift detection (Verified, simulated, run 2026-10-15; `docs/data/drift_demo.json`)
 
@@ -227,6 +238,9 @@ Quality gates: `python -m ruff check . && python -m ruff format --check . && pyt
 | `MLS_RANGE_MARGIN` | `0.1` | Inputs must lie within the training min/max widened by this fraction of the range |
 | `MLS_PREDICT_THREADS` | `1` | OpenMP threads for prediction |
 | `MLS_LOG_LEVEL` | `INFO` | JSON logs on stdout |
+| `MLS_LLM_ENABLED` | `true` | Enable LLM generation endpoint |
+| `MLS_LLM_MODEL` | `qwen3:8b` | Target LLM model identifier |
+| `MLS_LLM_BASE_URL` | `http://localhost:11434` | Ollama upstream daemon base URL |
 
 No secret is stored in the repository.
 
@@ -236,12 +250,13 @@ Interactive-style reference rendered from the OpenAPI document: `docs/index.html
 
 | Endpoint | Auth | Purpose | Notable responses |
 |---|---|---|---|
+| `POST /v1/generate` | key if configured | Streaming text generation (Server-Sent Events) or full JSON response (`stream=false`) | 200 `text/event-stream` with chunk deltas ending in `data: [DONE]`; 400; 401; 413; 422; 429; 503 |
 | `POST /predict` | key if configured | One block group (flat JSON with the 8 features) | 200 `{prediction, unit, model_version, request_id}`; 400 malformed JSON; 401; 413; 422; 429; 503 |
 | `POST /predict/batch` | key if configured | `{"instances": [...]}`, up to `MLS_MAX_BATCH_SIZE` | 200 `{predictions, count, ...}`; errors as above; 422 locations include the row index |
 | `GET /health` | open | Liveness | 200 |
 | `GET /ready` | open | Model loaded and checksum verified | 200, or 503 with the reason |
 | `GET /model-info` | key if configured | Version, stage, feature schema with accepted ranges, metrics, git commit, training date, SHA-256 | 200 / 503 |
-| `GET /metrics` | open | Prometheus text: `http_requests_total`, `http_request_duration_seconds` (histogram), `model_predictions_total`, `model_prediction_value` (histogram), `model_ready`, `model_info` | 200 |
+| `GET /metrics` | open | Prometheus text: HTTP metrics, model metrics, and LLM telemetry (`llm_requests_total{status}`, `llm_tokens_total{direction}`, `llm_ttft_seconds` [histogram], `llm_request_duration_seconds` [histogram]) | 200 |
 
 Validation: pydantic v2 strict mode (numbers only, no strings, no NaN or infinity, no extra fields) gives 422 responses such as `{"detail":[{"loc":["body","MedInc"],"msg":"Input should be a valid number","type":"float_type"}],"request_id":"..."}`. A value outside the training range returns `value_error.out_of_range` with the accepted interval. Every response carries `X-Request-ID` (a valid client-supplied ID is kept, otherwise a UUID is generated). Rejected requests are not written to the request log.
 
@@ -252,8 +267,8 @@ Validation: pydantic v2 strict mode (numbers only, no strings, no NaN or infinit
 ## Project structure
 
 ```
-src/mlserving/   config, schema, registry, train, predictor, app, middleware, metrics, reqlog, drift, cli
-tests/           171 tests (pytest, httpx TestClient); a synthetic dataset keeps them offline
+src/mlserving/   config, schema, registry, train, predictor, app, middleware, metrics, reqlog, drift, cli, llm
+tests/           184 tests (pytest, httpx TestClient); a synthetic dataset keeps them offline
 models/          registry.json, v1/, v2/ (model.joblib under 0.5 MB each, metadata.json, reference.json)
 loadtest/        run_loadtest.py (aiohttp client), bench_predict.py, make_charts.py, write_runlog.py (new runs get dated files; earlier ones are kept)
 scripts/         smoke_test.py, docker_smoke.sh, make_drift_demo.py, build_explorer.py

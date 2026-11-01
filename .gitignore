@@ -19,3 +19,4 @@ requests.jsonl
 runtime/
 scratch/
 .env
+uv.lock

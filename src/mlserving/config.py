@@ -33,6 +33,9 @@ class Settings:
     log_level: str = "INFO"
     range_margin: float = 0.1
     predict_threads: int = 1
+    llm_enabled: bool = True
+    llm_model: str = "qwen3:8b"
+    llm_base_url: str = "http://localhost:11434"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -95,4 +98,7 @@ class Settings:
             log_level=level,
             range_margin=margin,
             predict_threads=integer("PREDICT_THREADS", cls.predict_threads, 1),
+            llm_enabled=boolean("LLM_ENABLED", cls.llm_enabled),
+            llm_model=get("LLM_MODEL") or cls.llm_model,
+            llm_base_url=get("LLM_BASE_URL") or cls.llm_base_url,
         )
